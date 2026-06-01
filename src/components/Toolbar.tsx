@@ -106,7 +106,7 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
   return (
     <header className="toolbar">
       <div className="toolbar__brand">
-        <span className="toolbar__ghost">◐</span> GhostSlicer
+        <span className="toolbar__icon">◐</span> FluidBurn
       </div>
       <div className="toolbar__group">
         <button onClick={onImport}>Import…</button>

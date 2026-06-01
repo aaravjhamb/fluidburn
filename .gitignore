@@ -6,3 +6,4 @@ app-icon.png
 # Rust / Tauri
 src-tauri/target
 src-tauri/gen/schemas
+src-tauri

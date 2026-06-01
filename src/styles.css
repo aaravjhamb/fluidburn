@@ -63,7 +63,7 @@ input[type="number"] { width: 64px; }
 }
 .toolbar button, .toolbar select { -webkit-app-region: no-drag; }
 .toolbar__brand { font-weight: 600; letter-spacing: 0.2px; }
-.toolbar__ghost { color: var(--accent); }
+.toolbar__icon { color: var(--accent); }
 .toolbar__group { display: flex; gap: 8px; }
 .toolbar__group--run { margin-left: auto; }
 .toolbar__machine { margin-left: 8px; -webkit-app-region: no-drag; }
@@ -271,7 +271,7 @@ input[type="number"] { width: 64px; }
   box-shadow: 0 24px 80px rgba(20, 24, 32, 0.22);
 }
 .onboard__brand { font-weight: 600; color: var(--muted); margin-bottom: 12px; }
-.onboard__ghost { color: var(--accent); }
+.onboard__icon { color: var(--accent); }
 .onboard h1 { font-size: 22px; margin: 0 0 12px; }
 .onboard p { color: #3a4150; line-height: 1.5; }
 .onboard__safety { color: #3a4150; line-height: 1.5; padding-left: 18px; }

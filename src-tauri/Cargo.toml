@@ -1,13 +1,13 @@
 [package]
-name = "ghostslicer"
+name = "fluidburn"
 version = "0.1.0"
 description = "Laser CAM + GRBL sender"
-authors = ["yindus-ai"]
+authors = ["Aarav Jhamb"]
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "ghostslicer_lib"
+name = "fluidburn_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

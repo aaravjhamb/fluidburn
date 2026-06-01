@@ -23,14 +23,14 @@ export default function Onboarding() {
     <div className="onboard">
       <div className="onboard__card">
         <div className="onboard__brand">
-          <span className="onboard__ghost">◐</span> GhostSlicer
+          <span className="onboard__icon">◐</span> FluidBurn
         </div>
 
         {step === 0 && (
           <>
             <h1>Welcome</h1>
             <p>
-              GhostSlicer turns vector art and images into laser G-code and streams it
+              FluidBurn turns vector art and images into laser G-code and streams it
               to your GRBL controller. Let's set up your machine in a couple of steps.
             </p>
             <div className="onboard__nav">

@@ -1,4 +1,4 @@
-# GhostSlicer
+# FluidBurn
 
 A laser cutter app. Open a file, lay it out, send it to the machine.
 
