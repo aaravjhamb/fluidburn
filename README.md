@@ -1,8 +1,6 @@
 # FluidBurn
 
-A laser cutter app. Open a file, lay it out, send it to the machine.
-
-For a DIY laser: **Arduino + CNC shield running GRBL**, TMC2209 drivers, a diode laser.
+a modern fast alternative to lightburn!
 
 ## Run it
 
@@ -17,7 +15,6 @@ npm run tauri dev
 2. Drag, resize, rotate it. Set power/speed per layer on the left.
 3. **Generate G-code**, then **Save G-code…** for a file, or **Run** to send it to the machine.
 
-Connect: plug in the Arduino (or pair an HC-05), pick the port, hit Connect.
 
 ## ⚠️ Laser safety
 
