@@ -1,7 +1,5 @@
 name: Release
 
-# Build a signed + notarized macOS DMG and attach it to a GitHub Release.
-# Triggered by pushing a version tag, e.g.  git tag v0.1.0 && git push origin v0.1.0
 on:
   push:
     tags:
@@ -12,13 +10,13 @@ jobs:
   release-macos:
     runs-on: macos-latest
     permissions:
-      contents: write # needed to create the GitHub Release and upload assets
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust (with Intel + Apple Silicon targets)
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -37,19 +35,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build & publish DMG (unsigned)
+      - name: Build & publish DMG
         uses: tauri-apps/tauri-action@v0
-        # NOTE: This builds an UNSIGNED, un-notarized DMG (no Apple Developer
-        # Program membership). It works, but macOS Gatekeeper will warn users.
-        # See releaseBody below for the one-time "open anyway" instructions.
-        # To sign later: enroll in the Apple Developer Program, add the
-        # APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
-        # / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID secrets, and pass them
-        # here under `env:`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Universal binary runs natively on both Apple Silicon and Intel Macs.
           args: --target universal-apple-darwin
           tagName: ${{ github.ref_name }}
           releaseName: "FluidBurn ${{ github.ref_name }}"
