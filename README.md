@@ -4,6 +4,18 @@ A laser cutter app. Open a file, lay it out, send it to the machine.
 
 For a DIY laser: **Arduino + CNC shield running GRBL**, TMC2209 drivers, a diode laser.
 
+## Download (macOS)
+
+Grab the latest **`.dmg`** from the [Releases page](https://github.com/aaravjhamb/fluidburn/releases/latest). It's a universal build — works on both Apple Silicon and Intel Macs.
+
+This build isn't signed by Apple yet, so the first launch needs one extra step. After dragging FluidBurn to Applications, open **Terminal** and run:
+
+```bash
+xattr -cr /Applications/FluidBurn.app
+```
+
+Then open it normally. (One time only. Alternatively: right-click the app → **Open**, then **Privacy & Security → Open Anyway** if macOS still blocks it.)
+
 ## Run it
 
 ```bash
