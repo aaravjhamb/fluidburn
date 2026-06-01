@@ -1,0 +1,32 @@
+[package]
+name = "ghostslicer"
+version = "0.1.0"
+description = "Laser CAM + GRBL sender"
+authors = ["yindus-ai"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "ghostslicer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serialport = "4"
+anyhow = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp"] }
+roxmltree = "0.20"
+geo = "0.29"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
