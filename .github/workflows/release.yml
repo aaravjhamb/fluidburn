@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  release-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build & publish DMG
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target universal-apple-darwin
+          tagName: ${{ github.ref_name }}
+          releaseName: "FluidBurn ${{ github.ref_name }}"
+          releaseDraft: false
+          prerelease: false
+          releaseBody: |
+            ### Install (macOS)
+            1. Download **FluidBurn_*_universal.dmg** below.
+            2. Open it and drag **FluidBurn** to **Applications**.
+            3. This build is not signed by Apple, so the first launch needs one extra step:
+               open **Terminal** and run:
+               ```
+               xattr -cr /Applications/FluidBurn.app
+               ```
+               then open FluidBurn normally. (You only do this once.)
+
+            > Alternatively: right-click the app → **Open**, and if macOS still blocks it,
+            > go to **System Settings → Privacy & Security** and click **Open Anyway**.
