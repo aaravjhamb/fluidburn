@@ -37,6 +37,7 @@ interface AppState {
 
   gcode: GcodeResult | null;
   progress: JobProgress | null;
+  jobError: string | null;
 
   setPorts: (p: string[]) => void;
   setSelectedPort: (p: string | null) => void;
@@ -57,6 +58,7 @@ interface AppState {
 
   setGcode: (g: GcodeResult | null) => void;
   setProgress: (p: JobProgress | null) => void;
+  setJobError: (msg: string | null) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -76,6 +78,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   gcode: null,
   progress: null,
+  jobError: null,
 
   setPorts: (ports) => set({ ports }),
   setSelectedPort: (selectedPort) => set({ selectedPort }),
@@ -127,4 +130,5 @@ export const useStore = create<AppState>((set, get) => ({
 
   setGcode: (gcode) => set({ gcode }),
   setProgress: (progress) => set({ progress }),
+  setJobError: (jobError) => set({ jobError }),
 }));

@@ -126,6 +126,11 @@ pub struct GenerateInput {
     pub dynamic_power: bool,
 
     pub max_power: f64,
+
+    /// Scan-line pitch for raster engraving, in mm. 0 = use the image's
+    /// native pixel pitch (one G-code row per pixel row).
+    #[serde(default)]
+    pub line_interval_mm: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]

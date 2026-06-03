@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use grbl::{is_ack, parse_status};
+use grbl::{error_message, is_ack, parse_status, AckKind};
 
 const RX_LIMIT: usize = 127;
 
@@ -20,6 +20,13 @@ struct JobProgress {
     sent: usize,
     total: usize,
     elapsed: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JobError {
+    code: Option<u32>,
+    message: String,
 }
 
 enum Cmd {
@@ -33,7 +40,7 @@ enum Cmd {
     Resume,
     Cancel,
 
-    Ack(#[allow(dead_code)] bool),
+    Ack(AckKind),
     Shutdown,
 }
 
@@ -77,8 +84,8 @@ impl Device {
                                     if s.is_empty() {
                                         continue;
                                     }
-                                    if let Some(ok) = is_ack(&s) {
-                                        let _ = tx.send(Cmd::Ack(ok));
+                                    if let Some(ack) = is_ack(&s) {
+                                        let _ = tx.send(Cmd::Ack(ack));
                                     }
                                     if s.starts_with('<') {
                                         if let Some(st) = parse_status(&s, &mut wco) {
@@ -175,9 +182,28 @@ impl Device {
                             let _ = port.flush();
                             let _ = app.emit("grbl:console", "[job cancelled]".to_string());
                         }
-                        Cmd::Ack(_) => {
+                        Cmd::Ack(ack) => {
                             if let Some((len, is_job)) = pending.pop_front() {
                                 used = used.saturating_sub(len);
+                                if let AckKind::Error(code) = ack {
+                                    // GRBL/FluidNC rejected a line (error:N). Halt the
+                                    // job and kill the laser rather than streaming on.
+                                    queue.clear();
+                                    pending.clear();
+                                    used = 0;
+                                    if job_active {
+                                        job_active = false;
+                                        let _ = port.write_all(b"M5 S0\n");
+                                        let _ = port.flush();
+                                        let message = error_message(code);
+                                        let _ = app.emit(
+                                            "grbl:console",
+                                            format!("[job halted: {message}]"),
+                                        );
+                                        let _ = app.emit("job:error", JobError { code, message });
+                                    }
+                                    continue;
+                                }
                                 if is_job && job_active {
                                     job_done += 1;
                                     let _ = app.emit(

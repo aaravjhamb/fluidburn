@@ -129,18 +129,16 @@ fn vector_layer(color: &str) -> Layer {
 const PALETTE: [&str; 6] = ["#000000", "#ff0000", "#0000ff", "#00aa00", "#aa00aa", "#ff8800"];
 
 fn named_layer(color: &str, name: &str) -> Layer {
-    let kind = if is_dark(color) {
-        CutKind::Cut
-    } else {
-        CutKind::Score
-    };
+    // DXF layer colors are usually CAD defaults ("0", black), not deliberate
+    // cut-vs-score intent like SVG stroke colors are. Default everything to a
+    // safe low-power Score and let the user promote layers to Cut in the panel.
     Layer {
         id: color.to_string(),
-        name: format!("{name} ({})", kind_label(kind)),
-        kind,
+        name: format!("{name} ({})", kind_label(CutKind::Score)),
+        kind: CutKind::Score,
         enabled: true,
-        feed: if kind == CutKind::Cut { 600.0 } else { 1200.0 },
-        power_pct: if kind == CutKind::Cut { 90.0 } else { 40.0 },
+        feed: 1200.0,
+        power_pct: 40.0,
         passes: 1,
         color: color.to_string(),
     }
