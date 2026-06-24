@@ -19,6 +19,24 @@ const DEFAULT_STATUS: GrblStatus = {
 
 let pasteCounter = 0;
 
+// Travel-limit corners captured by jogging, in machine coordinates.
+export type Corners = Partial<Record<string, [number, number]>>;
+export const CORNER_KEYS = ["TL", "TR", "BL", "BR"] as const;
+
+// Axis-aligned box (machine coords) bounding the captured corners, or null.
+export function cornerBox(corners: Corners) {
+  const pts = Object.values(corners).filter(Boolean) as [number, number][];
+  if (pts.length < CORNER_KEYS.length) return null;
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return {
+    xmin: Math.min(...xs),
+    xmax: Math.max(...xs),
+    ymin: Math.min(...ys),
+    ymax: Math.max(...ys),
+  };
+}
+
 interface AppState {
 
   ports: string[];
@@ -59,6 +77,10 @@ interface AppState {
   setGcode: (g: GcodeResult | null) => void;
   setProgress: (p: JobProgress | null) => void;
   setJobError: (msg: string | null) => void;
+
+  corners: Corners;
+  setCorner: (key: string, pt: [number, number]) => void;
+  clearCorners: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -79,6 +101,10 @@ export const useStore = create<AppState>((set, get) => ({
   gcode: null,
   progress: null,
   jobError: null,
+  corners: {},
+
+  setCorner: (key, pt) => set((s) => ({ corners: { ...s.corners, [key]: pt } })),
+  clearCorners: () => set({ corners: {} }),
 
   setPorts: (ports) => set({ ports }),
   setSelectedPort: (selectedPort) => set({ selectedPort }),

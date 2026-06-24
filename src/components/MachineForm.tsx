@@ -18,6 +18,7 @@ export function newMachine(): Machine {
     maxPower: 1000,
     homing: false,
     baud: 115200,
+    corexy: false,
   };
 }
 
@@ -98,6 +99,14 @@ export default function MachineForm({
           onChange={(e) => set({ homing: e.target.checked })}
         />
         <span>Has homing / limit switches ($H)</span>
+      </label>
+      <label className="mform__row mform__check">
+        <input
+          type="checkbox"
+          checked={value.corexy}
+          onChange={(e) => set({ corexy: e.target.checked })}
+        />
+        <span>CoreXY / H-bot kinematics</span>
       </label>
     </div>
   );

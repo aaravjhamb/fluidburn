@@ -25,6 +25,23 @@ fn e<E: std::fmt::Display>(err: E) -> String {
     err.to_string()
 }
 
+/// CoreXY setting of the active machine (false if none selected).
+fn active_corexy(state: &AppState) -> bool {
+    state
+        .config
+        .lock()
+        .unwrap()
+        .active()
+        .map(|m| m.corexy)
+        .unwrap_or(false)
+}
+
+/// Push the active machine's CoreXY setting to the serial device so the
+/// status reader can inverse-transform reported position.
+fn sync_corexy(state: &AppState) {
+    state.device.set_corexy(active_corexy(state));
+}
+
 #[tauri::command]
 pub fn list_ports() -> Vec<String> {
     serial::list_ports()
@@ -32,6 +49,7 @@ pub fn list_ports() -> Vec<String> {
 
 #[tauri::command]
 pub fn connect(app: AppHandle, state: State<AppState>, port: String, baud: u32) -> CmdResult<()> {
+    sync_corexy(&state);
     state.device.connect(app, &port, baud).map_err(e)
 }
 
@@ -53,8 +71,14 @@ pub fn send_realtime(state: State<AppState>, byte: u8) -> CmdResult<()> {
 
 #[tauri::command]
 pub fn jog(state: State<AppState>, dx: f64, dy: f64, feed: f64) -> CmdResult<()> {
-
-    let line = format!("$J=G91 G21 X{} Y{} F{}", fmt(dx), fmt(dy), fmt(feed));
+    // Jog is a relative (G91) delta; the CoreXY transform is linear so the
+    // same forward mapping applies to the delta as to absolute coordinates.
+    let (mx, my) = if active_corexy(&state) {
+        (dx + dy, dx - dy)
+    } else {
+        (dx, dy)
+    };
+    let line = format!("$J=G91 G21 X{} Y{} F{}", fmt(mx), fmt(my), fmt(feed));
     state.device.send_line(&line).map_err(e)
 }
 
@@ -94,7 +118,14 @@ pub fn generate_gcode(state: State<AppState>, input: GenerateInput) -> CmdResult
         .as_ref()
         .and_then(|p| docs.get(&p.doc_id))
         .and_then(|d| d.raster.as_ref());
-    Ok(cam::generate(&input, raster))
+    let corexy = state
+        .config
+        .lock()
+        .unwrap()
+        .active()
+        .map(|m| m.corexy)
+        .unwrap_or(false);
+    Ok(cam::generate(&input, raster, corexy))
 }
 
 #[tauri::command]
@@ -126,7 +157,10 @@ pub fn save_machine(
     }
     cfg.upsert(machine);
     config::save(&app, &cfg).map_err(e)?;
-    Ok(cfg.clone())
+    let out = cfg.clone();
+    drop(cfg);
+    sync_corexy(&state);
+    Ok(out)
 }
 
 #[tauri::command]
@@ -146,7 +180,10 @@ pub fn set_active_machine(
     let mut cfg = state.config.lock().unwrap();
     cfg.active_id = Some(id);
     config::save(&app, &cfg).map_err(e)?;
-    Ok(cfg.clone())
+    let out = cfg.clone();
+    drop(cfg);
+    sync_corexy(&state);
+    Ok(out)
 }
 
 #[tauri::command]

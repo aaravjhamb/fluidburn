@@ -1,3 +1,18 @@
+/// CoreXY forward kinematics: cartesian (x, y) -> motor words (A, B).
+/// Matches GRBL's built-in `#define COREXY`, so a cartesian GRBL fed these
+/// values moves identically to a CoreXY-firmware machine fed plain x/y.
+#[inline]
+pub fn corexy_fwd(p: [f64; 2]) -> [f64; 2] {
+    [p[0] + p[1], p[0] - p[1]]
+}
+
+/// CoreXY inverse kinematics: motor position (A, B) -> cartesian (x, y).
+/// Used to turn the motor-space position GRBL reports back into true x/y.
+#[inline]
+pub fn corexy_inv(p: [f64; 2]) -> [f64; 2] {
+    [(p[0] + p[1]) / 2.0, (p[0] - p[1]) / 2.0]
+}
+
 pub struct GcodeBuilder {
     out: String,
     lines: usize,
@@ -6,6 +21,7 @@ pub struct GcodeBuilder {
     travel_mm: f64,
     travel_feed: f64,
     last: Option<[f64; 2]>,
+    corexy: bool,
 }
 
 impl GcodeBuilder {
@@ -17,6 +33,7 @@ impl GcodeBuilder {
             travel_mm: 0.0,
             travel_feed: travel_feed.max(1.0),
             last: None,
+            corexy: false,
         };
         b.raw("; FluidBurn G-code");
         b.raw("G21");
@@ -24,6 +41,19 @@ impl GcodeBuilder {
         b.raw("G17");
         b.raw("M5 S0");
         b
+    }
+
+    pub fn set_corexy(&mut self, on: bool) {
+        self.corexy = on;
+    }
+
+    /// Map a cartesian point to the coordinates actually emitted in G-code.
+    fn emit(&self, p: [f64; 2]) -> [f64; 2] {
+        if self.corexy {
+            corexy_fwd(p)
+        } else {
+            p
+        }
     }
 
     pub fn raw(&mut self, line: &str) {
@@ -46,7 +76,8 @@ impl GcodeBuilder {
         if let Some(last) = self.last {
             self.travel_mm += dist(last, p);
         }
-        self.raw(&format!("G0 X{} Y{}", fmt(p[0]), fmt(p[1])));
+        let e = self.emit(p);
+        self.raw(&format!("G0 X{} Y{}", fmt(e[0]), fmt(e[1])));
         self.last = Some(p);
     }
 
@@ -54,10 +85,11 @@ impl GcodeBuilder {
         if let Some(last) = self.last {
             self.cut_secs += dist(last, p) / f.max(1.0) * 60.0;
         }
+        let e = self.emit(p);
         if emit_feed {
-            self.raw(&format!("G1 X{} Y{} F{}", fmt(p[0]), fmt(p[1]), fmt(f)));
+            self.raw(&format!("G1 X{} Y{} F{}", fmt(e[0]), fmt(e[1]), fmt(f)));
         } else {
-            self.raw(&format!("G1 X{} Y{}", fmt(p[0]), fmt(p[1])));
+            self.raw(&format!("G1 X{} Y{}", fmt(e[0]), fmt(e[1])));
         }
         self.last = Some(p);
     }
