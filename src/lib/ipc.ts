@@ -27,6 +27,11 @@ export interface JobProgress {
   elapsed: number;
 }
 
+export interface JobError {
+  code: number | null;
+  message: string;
+}
+
 export type CutKind = "Cut" | "Engrave" | "Score";
 
 export interface Layer {
@@ -107,6 +112,8 @@ export interface GenerateInput {
   travelFeed: number;
   dynamicPower: boolean;
   maxPower: number;
+  /** Raster scan-line pitch in mm. Omit or 0 for one row per image pixel. */
+  lineIntervalMm?: number;
 }
 
 export const listPorts = () => invoke<string[]>("list_ports");
@@ -162,3 +169,5 @@ export const onProgress = (cb: (p: JobProgress) => void): Promise<UnlistenFn> =>
   listen<JobProgress>("job:progress", (e) => cb(e.payload));
 export const onConsole = (cb: (line: string) => void): Promise<UnlistenFn> =>
   listen<string>("grbl:console", (e) => cb(e.payload));
+export const onJobError = (cb: (e: JobError) => void): Promise<UnlistenFn> =>
+  listen<JobError>("job:error", (e) => cb(e.payload));

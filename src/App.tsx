@@ -4,6 +4,7 @@ import {
   onStatus,
   onProgress,
   onConsole,
+  onJobError,
   listPorts,
   getConfig,
 } from "./lib/ipc";
@@ -20,6 +21,8 @@ export default function App() {
   const pushConsole = useStore((s) => s.pushConsole);
   const setPorts = useStore((s) => s.setPorts);
   const setConfig = useStore((s) => s.setConfig);
+  const setJobError = useStore((s) => s.setJobError);
+  const jobError = useStore((s) => s.jobError);
   const config = useStore((s) => s.config);
 
   const [machinesOpen, setMachinesOpen] = useState(false);
@@ -29,13 +32,17 @@ export default function App() {
       onStatus(setStatus),
       onProgress(setProgress),
       onConsole(pushConsole),
+      onJobError((e) => {
+        setProgress(null);
+        setJobError(e.message);
+      }),
     ]);
     listPorts().then(setPorts).catch(() => {});
     getConfig().then(setConfig).catch(() => {});
     return () => {
       unlisteners.then((us) => us.forEach((u) => u()));
     };
-  }, [setStatus, setProgress, pushConsole, setPorts, setConfig]);
+  }, [setStatus, setProgress, pushConsole, setJobError, setPorts, setConfig]);
 
   if (config && !config.onboarded) {
     return <Onboarding />;
@@ -43,6 +50,12 @@ export default function App() {
 
   return (
     <div className="app">
+      {jobError && (
+        <div className="job-error" role="alert">
+          <span>⚠ Job halted — {jobError}</span>
+          <button onClick={() => setJobError(null)}>Dismiss</button>
+        </div>
+      )}
       <Toolbar onOpenMachines={() => setMachinesOpen(true)} />
       <div className="app__body">
         <LayerPanel />

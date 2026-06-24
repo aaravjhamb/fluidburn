@@ -116,13 +116,40 @@ fn parse_vec3(s: &str) -> Option<[f64; 3]> {
     ])
 }
 
-pub fn is_ack(line: &str) -> Option<bool> {
+pub enum AckKind {
+    Ok,
+    Error(Option<u32>),
+}
+
+pub fn is_ack(line: &str) -> Option<AckKind> {
     let l = line.trim();
     if l == "ok" {
-        Some(true)
-    } else if l.starts_with("error") {
-        Some(false)
+        Some(AckKind::Ok)
+    } else if let Some(rest) = l.strip_prefix("error:") {
+        Some(AckKind::Error(rest.trim().parse().ok()))
+    } else if l == "error" {
+        Some(AckKind::Error(None))
     } else {
         None
     }
+}
+
+/// Short human-readable text for the common GRBL/FluidNC error codes.
+pub fn error_message(code: Option<u32>) -> String {
+    let Some(c) = code else {
+        return "error".to_string();
+    };
+    let text = match c {
+        1 => "expected G-code letter",
+        2 => "bad number format",
+        3 => "invalid $ command",
+        9 => "G-code locked (alarm/jog active)",
+        15 => "travel exceeded (jog)",
+        17 => "laser mode needs a PWM pin",
+        20 => "unsupported G-code command",
+        22 => "feed rate not set",
+        33 => "invalid target / travel exceeded",
+        _ => return format!("error:{c}"),
+    };
+    format!("error:{c} ({text})")
 }

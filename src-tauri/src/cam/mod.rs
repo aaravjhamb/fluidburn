@@ -71,9 +71,16 @@ fn engrave_raster(
     g.layer_header(&layer.name, input.dynamic_power, base_s);
 
     let px_mm = scale / raster.dpmm.max(0.001);
+    // Optional coarser scan pitch: subsample rows so the line interval can be
+    // larger than the image's native pixel pitch (0 = every row).
+    let row_step = if input.line_interval_mm > 0.0 {
+        (input.line_interval_mm / px_mm).round().max(1.0) as u32
+    } else {
+        1
+    };
     let mut left_to_right = true;
 
-    for row in 0..raster.height {
+    for row in (0..raster.height).step_by(row_step as usize) {
         let img_y = raster.height - 1 - row;
         let y_mm = y_off + row as f64 * px_mm;
 
@@ -161,6 +168,7 @@ mod tests {
             travel_feed: 6000.0,
             dynamic_power: true,
             max_power: 1000.0,
+            line_interval_mm: 0.0,
         };
         let r = generate(&input, None);
         assert!(r.gcode.contains("M4 S800"), "dynamic power at 80%");

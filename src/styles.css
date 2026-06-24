@@ -283,3 +283,25 @@ input[type="number"] { width: 64px; }
 .onboard__dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .onboard__dots span.on { background: var(--accent); }
 .onboard .mform { padding: 8px 0; }
+
+.job-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--estop);
+  color: #fff;
+  font-weight: 600;
+}
+
+.job-error button {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
