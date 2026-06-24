@@ -5,8 +5,9 @@ use crate::model::{
     CutKind, DocBounds, GcodeResult, GenerateInput, Layer, Polyline, RasterImage,
 };
 
-pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>) -> GcodeResult {
+pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>, corexy: bool) -> GcodeResult {
     let mut g = GcodeBuilder::new(input.travel_feed);
+    g.set_corexy(corexy);
     let mut all_pts: Vec<Polyline> = Vec::new();
 
     for layer in input.layers.iter().filter(|l| l.enabled) {
@@ -170,10 +171,31 @@ mod tests {
             max_power: 1000.0,
             line_interval_mm: 0.0,
         };
-        let r = generate(&input, None);
+        let r = generate(&input, None, false);
         assert!(r.gcode.contains("M4 S800"), "dynamic power at 80%");
         assert!(r.gcode.contains("G1 X10 Y0 F600"));
         assert!(r.gcode.contains("G0 X0 Y0"), "parks at origin");
         assert!(r.est_seconds > 0.0);
+    }
+
+    #[test]
+    fn corexy_transforms_coordinates() {
+        let input = GenerateInput {
+            layers: vec![layer("#000000", CutKind::Cut)],
+            vectors: vec![VectorGroup {
+                layer_id: "#000000".into(),
+                polylines: vec![vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]],
+            }],
+            raster: None,
+            travel_feed: 6000.0,
+            dynamic_power: true,
+            max_power: 1000.0,
+            line_interval_mm: 0.0,
+        };
+        let r = generate(&input, None, true);
+        // (10,0) -> A=x+y=10, B=x-y=10
+        assert!(r.gcode.contains("G1 X10 Y10 F600"), "corexy maps (10,0)->(10,10)");
+        // (10,10) -> A=20, B=0
+        assert!(r.gcode.contains("G1 X20 Y0"), "corexy maps (10,10)->(20,0)");
     }
 }

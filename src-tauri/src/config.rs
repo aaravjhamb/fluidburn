@@ -34,6 +34,12 @@ pub struct Machine {
     pub max_power: f64,
     pub homing: bool,
     pub baud: u32,
+
+    /// CoreXY / H-bot kinematics. When true, FluidBurn applies the CoreXY
+    /// motor transform itself so a plain (cartesian) GRBL drives the machine
+    /// correctly. Defaults to false so existing configs keep loading.
+    #[serde(default)]
+    pub corexy: bool,
 }
 
 impl Default for Machine {
@@ -48,6 +54,7 @@ impl Default for Machine {
             max_power: 1000.0,
             homing: false,
             baud: 115200,
+            corexy: false,
         }
     }
 }

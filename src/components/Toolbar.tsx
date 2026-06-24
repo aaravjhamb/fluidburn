@@ -1,5 +1,5 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { useStore } from "../state/store";
+import { useStore, cornerBox } from "../state/store";
 import {
   importFile,
   generateGcode,
@@ -25,7 +25,44 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     status,
     pushConsole,
     activeMachine,
+    corners,
   } = useStore();
+
+  // Block a run whose toolpath would leave the calibrated travel box. Works
+  // in machine coords: job work-coords + the current work offset (mpos-wpos).
+  function runJob() {
+    if (!gcode) return;
+    const box = cornerBox(corners);
+    if (box) {
+      const b = gcode.bounds;
+      const wcoX = status.mpos[0] - status.wpos[0];
+      const wcoY = status.mpos[1] - status.wpos[1];
+      // include the origin (0,0) — jobs travel through it and park there.
+      const lo = (v: number, w: number) => Math.min(v, 0) + w;
+      const hi = (v: number, w: number) => Math.max(v, 0) + w;
+      const mnx = lo(b.minX, wcoX);
+      const mxx = hi(b.maxX, wcoX);
+      const mny = lo(b.minY, wcoY);
+      const mxy = hi(b.maxY, wcoY);
+      // tolerance absorbs sub-mm rounding from the measured work offset; the
+      // limit is a point the head physically reached during calibration.
+      const eps = 0.5;
+      if (
+        mnx < box.xmin - eps ||
+        mxx > box.xmax + eps ||
+        mny < box.ymin - eps ||
+        mxy > box.ymax + eps
+      ) {
+        pushConsole(
+          `[safety] run blocked — path X[${mnx.toFixed(1)},${mxx.toFixed(1)}] Y[${mny.toFixed(1)},${mxy.toFixed(1)}] ` +
+            `leaves limits X[${box.xmin},${box.xmax}] Y[${box.ymin},${box.ymax}]`,
+        );
+        pushConsole("[safety] move the art inside the bed, or re-set origin");
+        return;
+      }
+    }
+    startJob(gcode.gcode).catch((e) => pushConsole(`[error] ${e}`));
+  }
 
   async function onImport() {
     const path = await open({
@@ -124,7 +161,7 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
         <button
           className="btn--go"
           disabled={!connected || !gcode || running}
-          onClick={() => gcode && startJob(gcode.gcode)}
+          onClick={runJob}
         >
           ▶ Run
         </button>

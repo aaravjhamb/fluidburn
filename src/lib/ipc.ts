@@ -78,6 +78,7 @@ export interface Machine {
   maxPower: number;
   homing: boolean;
   baud: number;
+  corexy: boolean;
 }
 
 export interface Config {
@@ -133,6 +134,8 @@ export const jog = (dx: number, dy: number, feed: number) =>
   invoke<void>("jog", { dx, dy, feed });
 export const home = () => sendLine("$H");
 export const unlock = () => sendLine("$X");
+// Set the current head position as work origin (G54 X0 Y0) without homing.
+export const setOrigin = () => sendLine("G10 L20 P1 X0 Y0");
 
 export const startJob = (gcode: string) => invoke<void>("start_job", { gcode });
 export const pauseJob = () => invoke<void>("pause_job");

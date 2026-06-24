@@ -2,14 +2,16 @@ pub mod grbl;
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
+use crate::gcode::corexy_inv;
 use grbl::{error_message, is_ack, parse_status, AckKind};
 
 const RX_LIMIT: usize = 127;
@@ -46,13 +48,21 @@ enum Cmd {
 
 pub struct Device {
     conn: Mutex<Option<Sender<Cmd>>>,
+    corexy: Arc<AtomicBool>,
 }
 
 impl Device {
     pub fn new() -> Self {
         Self {
             conn: Mutex::new(None),
+            corexy: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Set whether reported position should be inverse-transformed from
+    /// CoreXY motor space back to cartesian. Shared live with the reader.
+    pub fn set_corexy(&self, on: bool) {
+        self.corexy.store(on, Ordering::Relaxed);
     }
 
     pub fn connect(&self, app: AppHandle, port: &str, baud: u32) -> anyhow::Result<()> {
@@ -68,6 +78,7 @@ impl Device {
         {
             let app = app.clone();
             let tx = tx.clone();
+            let corexy = self.corexy.clone();
             let mut reader = reader_handle;
             thread::spawn(move || {
                 let mut buf = [0u8; 512];
@@ -88,7 +99,15 @@ impl Device {
                                         let _ = tx.send(Cmd::Ack(ack));
                                     }
                                     if s.starts_with('<') {
-                                        if let Some(st) = parse_status(&s, &mut wco) {
+                                        if let Some(mut st) = parse_status(&s, &mut wco) {
+                                            if corexy.load(Ordering::Relaxed) {
+                                                let inv = |p: [f64; 3]| {
+                                                    let c = corexy_inv([p[0], p[1]]);
+                                                    [c[0], c[1], p[2]]
+                                                };
+                                                st.mpos = inv(st.mpos);
+                                                st.wpos = inv(st.wpos);
+                                            }
                                             let _ = app.emit("grbl:status", st);
                                             continue;
                                         }
