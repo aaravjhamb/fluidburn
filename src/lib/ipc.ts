@@ -67,6 +67,7 @@ export interface ImportResult {
 }
 
 export type Origin = "FrontLeft" | "FrontRight" | "BackLeft" | "BackRight";
+export type Theme = "Auto" | "Light" | "Dark";
 
 export interface Machine {
   id: string;
@@ -79,12 +80,15 @@ export interface Machine {
   homing: boolean;
   baud: number;
   corexy: boolean;
+  /** GRBL laser mode ($32) — required for M4 dynamic power to track feed. */
+  laserMode: boolean;
 }
 
 export interface Config {
   machines: Machine[];
   activeId: string | null;
   onboarded: boolean;
+  theme: Theme;
 }
 
 export interface GcodeResult {
@@ -104,6 +108,8 @@ export interface RasterPlacement {
   x: number;
   y: number;
   scale: number;
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 export interface GenerateInput {
@@ -144,6 +150,9 @@ export const gotoOrigin = async () => {
 };
 
 export const startJob = (gcode: string) => invoke<void>("start_job", { gcode });
+/** Walk the job outline with the beam off to check placement. */
+export const frameJob = (bounds: DocBounds, feed: number) =>
+  invoke<void>("frame_job", { bounds, feed });
 export const pauseJob = () => invoke<void>("pause_job");
 export const resumeJob = () => invoke<void>("resume_job");
 export const cancelJob = () => invoke<void>("cancel_job");
@@ -171,6 +180,7 @@ export const setActiveMachine = (id: string) =>
   invoke<Config>("set_active_machine", { id });
 export const setOnboarded = (value: boolean) =>
   invoke<Config>("set_onboarded", { value });
+export const setTheme = (theme: Theme) => invoke<Config>("set_theme", { theme });
 
 export const onStatus = (cb: (s: GrblStatus) => void): Promise<UnlistenFn> =>
   listen<GrblStatus>("grbl:status", (e) => cb(e.payload));

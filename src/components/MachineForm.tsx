@@ -19,6 +19,7 @@ export function newMachine(): Machine {
     homing: false,
     baud: 115200,
     corexy: false,
+    laserMode: true,
   };
 }
 
@@ -108,6 +109,19 @@ export default function MachineForm({
         />
         <span>CoreXY / H-bot kinematics</span>
       </label>
+      <label className="mform__row mform__check">
+        <input
+          type="checkbox"
+          checked={value.laserMode}
+          onChange={(e) => set({ laserMode: e.target.checked })}
+        />
+        <span>Laser mode ($32) — set on connect</span>
+      </label>
+      <p className="mform__note">
+        Laser mode lets M4 scale power with speed. Leave it on for a laser:
+        without it GRBL stops dead at every corner while the beam keeps
+        burning, which scorches each vertex. Turn it off only for a spindle.
+      </p>
     </div>
   );
 }

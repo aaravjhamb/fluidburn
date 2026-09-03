@@ -24,6 +24,8 @@ export default function App() {
   const setJobError = useStore((s) => s.setJobError);
   const jobError = useStore((s) => s.jobError);
   const config = useStore((s) => s.config);
+  const setSystemDark = useStore((s) => s.setSystemDark);
+  const theme = useStore((s) => s.resolvedTheme());
 
   const [machinesOpen, setMachinesOpen] = useState(false);
 
@@ -43,6 +45,20 @@ export default function App() {
       unlisteners.then((us) => us.forEach((u) => u()));
     };
   }, [setStatus, setProgress, pushConsole, setJobError, setPorts, setConfig]);
+
+  // Track the OS appearance so the "Auto" setting can follow it live.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setSystemDark(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [setSystemDark]);
+
+  // Stamped on <html> so the stylesheet can key every colour off one attribute.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   if (config && !config.onboarded) {
     return <Onboarding />;

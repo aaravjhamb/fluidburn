@@ -16,6 +16,25 @@ use grbl::{error_message, is_ack, parse_status, AckKind};
 
 const RX_LIMIT: usize = 127;
 
+/// How long to wait for a welcome banner before pushing init lines anyway.
+const INIT_FALLBACK_MS: u64 = 2500;
+
+/// Drain the pending init lines and queue them. A no-op once emptied, so the
+/// banner and the fallback timer can both call it safely.
+fn send_init(app: &AppHandle, tx: &Sender<Cmd>, init: &Arc<Mutex<Vec<String>>>) {
+    let lines: Vec<String> = {
+        let mut guard = match init.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        guard.drain(..).collect()
+    };
+    for l in lines {
+        let _ = app.emit("grbl:console", format!("[init] {l}"));
+        let _ = tx.send(Cmd::Line(l, false));
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JobProgress {
@@ -65,7 +84,15 @@ impl Device {
         self.corexy.store(on, Ordering::Relaxed);
     }
 
-    pub fn connect(&self, app: AppHandle, port: &str, baud: u32) -> anyhow::Result<()> {
+    /// Open `port` and start the reader/writer threads. `init` holds lines to
+    /// push once the controller announces itself (see `INIT_FALLBACK_MS`).
+    pub fn connect(
+        &self,
+        app: AppHandle,
+        port: &str,
+        baud: u32,
+        init: Vec<String>,
+    ) -> anyhow::Result<()> {
         self.disconnect();
 
         let port_handle = serialport::new(port, baud)
@@ -75,10 +102,26 @@ impl Device {
 
         let (tx, rx) = mpsc::channel::<Cmd>();
 
+        // Init lines are drained exactly once, whichever comes first: the
+        // controller's welcome banner, or the fallback timer below for boards
+        // that don't reset when the port opens.
+        let init = Arc::new(Mutex::new(init));
+
+        {
+            let app = app.clone();
+            let tx = tx.clone();
+            let init = init.clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(INIT_FALLBACK_MS));
+                send_init(&app, &tx, &init);
+            });
+        }
+
         {
             let app = app.clone();
             let tx = tx.clone();
             let corexy = self.corexy.clone();
+            let init = init.clone();
             let mut reader = reader_handle;
             thread::spawn(move || {
                 let mut buf = [0u8; 512];
@@ -111,6 +154,10 @@ impl Device {
                                             let _ = app.emit("grbl:status", st);
                                             continue;
                                         }
+                                    }
+                                    // "Grbl 1.1f ..." / "Grbl 3.7 [FluidNC ...]"
+                                    if s.starts_with("Grbl") {
+                                        send_init(&app, &tx, &init);
                                     }
                                     let _ = app.emit("grbl:console", s);
                                 } else if b != b'\r' {

@@ -3,6 +3,7 @@ pub mod boolean;
 use crate::gcode::GcodeBuilder;
 use crate::model::{
     CutKind, DocBounds, GcodeResult, GenerateInput, Layer, Polyline, RasterImage,
+    RasterPlacement,
 };
 
 pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>, corexy: bool) -> GcodeResult {
@@ -13,7 +14,7 @@ pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>, corexy: boo
     for layer in input.layers.iter().filter(|l| l.enabled) {
         if layer.id == "raster" {
             if let (Some(img), Some(place)) = (raster, &input.raster) {
-                engrave_raster(&mut g, img, layer, input, place.x, place.y, place.scale);
+                engrave_raster(&mut g, img, layer, input, place);
                 let w = img.width as f64 / img.dpmm * place.scale;
                 let h = img.height as f64 / img.dpmm * place.scale;
                 all_pts.push(vec![[place.x, place.y], [place.x + w, place.y + h]]);
@@ -31,6 +32,24 @@ pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>, corexy: boo
         est_seconds,
         bounds: DocBounds::of(&all_pts),
     }
+}
+
+/// Trace `b` with the beam off (G0 only) so the operator can watch where the
+/// job will land before committing to a cut.
+pub fn frame_gcode(b: &DocBounds, feed: f64, corexy: bool) -> String {
+    let mut g = GcodeBuilder::new(feed);
+    g.set_corexy(corexy);
+    g.comment("frame preview - beam off");
+    for p in [
+        [b.min_x, b.min_y],
+        [b.max_x, b.min_y],
+        [b.max_x, b.max_y],
+        [b.min_x, b.max_y],
+        [b.min_x, b.min_y],
+    ] {
+        g.travel(p);
+    }
+    g.finish().0
 }
 
 fn power_s(layer: &Layer, input: &GenerateInput) -> f64 {
@@ -58,16 +77,14 @@ fn cut_vector(g: &mut GcodeBuilder, polys: &[Polyline], layer: &Layer, input: &G
     g.laser_off();
 }
 
-#[allow(clippy::too_many_arguments)]
 fn engrave_raster(
     g: &mut GcodeBuilder,
     raster: &RasterImage,
     layer: &Layer,
     input: &GenerateInput,
-    x_off: f64,
-    y_off: f64,
-    scale: f64,
+    place: &RasterPlacement,
 ) {
+    let (x_off, y_off, scale) = (place.x, place.y, place.scale);
     let base_s = power_s(layer, input);
     g.layer_header(&layer.name, input.dynamic_power, base_s);
 
@@ -81,8 +98,21 @@ fn engrave_raster(
     };
     let mut left_to_right = true;
 
+    // `left_to_right` tracks image-column order; with flip_x the physical
+    // direction inverts, and the serpentine alternation still holds.
+    let col_x = |c: u32| -> f64 {
+        let c = if place.flip_x { raster.width - c } else { c };
+        x_off + c as f64 * px_mm
+    };
+
+    // Image rows run top-down while the bed runs bottom-up, so an unflipped
+    // engrave reads the image backwards; flip_y cancels that.
     for row in (0..raster.height).step_by(row_step as usize) {
-        let img_y = raster.height - 1 - row;
+        let img_y = if place.flip_y {
+            row
+        } else {
+            raster.height - 1 - row
+        };
         let y_mm = y_off + row as f64 * px_mm;
 
         let runs = encode_row(raster, img_y, base_s);
@@ -97,7 +127,7 @@ fn engrave_raster(
         };
 
         let lead_col = if left_to_right { 0 } else { raster.width };
-        g.travel([x_off + lead_col as f64 * px_mm, y_mm]);
+        g.travel([col_x(lead_col), y_mm]);
         g.raw(&format!("G1 F{}", crate::gcode::fmt(layer.feed)));
 
         for run in ordered {
@@ -106,7 +136,7 @@ fn engrave_raster(
 
             g.raw(&format!(
                 "G1 X{} S{}",
-                crate::gcode::fmt(x_off + x_col as f64 * px_mm),
+                crate::gcode::fmt(col_x(x_col)),
                 crate::gcode::fmt(s.round())
             ));
         }
@@ -176,6 +206,28 @@ mod tests {
         assert!(r.gcode.contains("G1 X10 Y0 F600"));
         assert!(r.gcode.contains("G0 X0 Y0"), "parks at origin");
         assert!(r.est_seconds > 0.0);
+    }
+
+    #[test]
+    fn frame_traces_bounds_with_beam_off() {
+        let b = DocBounds { min_x: 10.0, min_y: 20.0, max_x: 90.0, max_y: 60.0 };
+        let g = frame_gcode(&b, 3000.0, false);
+        for corner in ["G0 X10 Y20", "G0 X90 Y20", "G0 X90 Y60", "G0 X10 Y60"] {
+            assert!(g.contains(corner), "frame visits {corner}");
+        }
+        // Prefix-match per line: a bare `contains` would trip over the G17
+        // plane-select in the preamble.
+        let cuts = g.lines().any(|l| l.starts_with("G1 ") || l.starts_with("M4"));
+        assert!(!cuts, "frame never cuts or enables the laser");
+    }
+
+    #[test]
+    fn frame_respects_corexy() {
+        let b = DocBounds { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0 };
+        let g = frame_gcode(&b, 3000.0, true);
+        // (10,0) -> A=10, B=10 ; (10,10) -> A=20, B=0
+        assert!(g.contains("G0 X10 Y10"));
+        assert!(g.contains("G0 X20 Y0"));
     }
 
     #[test]

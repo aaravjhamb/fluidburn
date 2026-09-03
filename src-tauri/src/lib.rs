@@ -27,6 +27,7 @@ pub fn run() {
             commands::send_realtime,
             commands::jog,
             commands::start_job,
+            commands::frame_job,
             commands::pause_job,
             commands::resume_job,
             commands::cancel_job,
@@ -39,6 +40,7 @@ pub fn run() {
             commands::delete_machine,
             commands::set_active_machine,
             commands::set_onboarded,
+            commands::set_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FluidBurn");

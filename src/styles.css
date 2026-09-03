@@ -3,11 +3,28 @@
   --panel: #f8f9fb;
   --panel-2: #e9ecf1;
   --line: #d4d8e0;
+  --line-strong: #b9c0cc;
   --text: #1b1f27;
+  --text-2: #3a4150;
   --muted: #707888;
   --accent: #0a84ff;
+  --accent-soft: #eaf3ff;
   --go: #1aa251;
   --estop: #e23b3b;
+  --hold: #c77f00;
+  --on-accent: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #eef1f6;
+  --canvas: #e6e8ed;
+  --console: #f3f4f8;
+  --toolbar-a: #ffffff;
+  --toolbar-b: #f1f3f7;
+  --onboard-a: #ffffff;
+  --onboard-b: #e2e5ea;
+  --swatch-ring: rgba(0, 0, 0, 0.2);
+  --scrim: rgba(20, 24, 32, 0.35);
+  --shadow-modal: 0 20px 60px rgba(20, 24, 32, 0.25);
+  --shadow-card: 0 24px 80px rgba(20, 24, 32, 0.22);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   font-size: 13px;
 }
@@ -24,7 +41,7 @@ html, body, #root {
 }
 
 button {
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -33,14 +50,14 @@ button {
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
-button:hover:not(:disabled) { background: #eef1f6; border-color: #b9c0cc; }
+button:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--line-strong); }
 button:disabled { opacity: 0.45; cursor: default; }
-.btn--on { background: var(--accent); color: #fff; border-color: var(--accent); }
-.btn--go { background: var(--go); color: #fff; border-color: var(--go); font-weight: 600; }
-.btn--estop { background: var(--estop); color: #fff; border-color: var(--estop); font-weight: 700; }
+.btn--on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn--go { background: var(--go); color: var(--on-accent); border-color: var(--go); font-weight: 600; }
+.btn--estop { background: var(--estop); color: var(--on-accent); border-color: var(--estop); font-weight: 700; }
 
 select, input {
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -56,7 +73,7 @@ input[type="number"] { width: 64px; }
   align-items: center;
   gap: 16px;
   padding: 8px 14px;
-  background: linear-gradient(180deg, #ffffff, #f1f3f7);
+  background: linear-gradient(180deg, var(--toolbar-a), var(--toolbar-b));
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
   padding-left: 80px;
@@ -73,13 +90,13 @@ input[type="number"] { width: 64px; }
   padding: 4px 10px;
   border-radius: 6px;
   font-weight: 600;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 .toolbar__state--idle { color: var(--go); }
 .toolbar__state--run { color: var(--accent); }
 .toolbar__state--alarm, .toolbar__state--door { color: var(--estop); }
-.toolbar__state--hold { color: #c77f00; }
+.toolbar__state--hold { color: var(--hold); }
 
 .app__body { display: flex; flex: 1; min-height: 0; }
 
@@ -105,13 +122,13 @@ input[type="number"] { width: 64px; }
 
 .layer { padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .layer__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.layer__swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #0003; }
+.layer__swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--swatch-ring); }
 .layer__name { font-weight: 600; }
 .layer__row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .layer__row label { width: 56px; color: var(--muted); }
 .layer__unit { color: var(--muted); font-size: 11px; }
 
-.workspace { flex: 1; min-width: 0; background: #e6e8ed; position: relative; }
+.workspace { flex: 1; min-width: 0; background: var(--canvas); position: relative; }
 .workspace__canvas { width: 100%; height: 100%; display: block; touch-action: none; }
 .workspace__hint {
   position: absolute;
@@ -168,7 +185,7 @@ input[type="number"] { width: 64px; }
 }
 .device__dro > div {
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-  padding: 8px 12px; background: #fff;
+  padding: 8px 12px; background: var(--surface);
   font-variant-numeric: tabular-nums; min-width: 0;
 }
 .device__dro label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
@@ -200,7 +217,7 @@ input[type="number"] { width: 64px; }
   font-size: 18px; display: flex; align-items: center; justify-content: center;
 }
 .jog__home { color: var(--accent); }
-.jog__home:hover:not(:disabled) { background: #eaf3ff; border-color: var(--accent); }
+.jog__home:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
 .jog__unlock { width: 100%; }
 .jog__origin { width: 100%; font-weight: 600; }
 .jog__soft {
@@ -239,14 +256,14 @@ input[type="number"] { width: 64px; }
   overflow-y: auto;
   margin: 0 12px;
   padding: 8px;
-  background: #f3f4f8;
+  background: var(--console);
   border: 1px solid var(--line);
   border-radius: 6px;
   font-family: "SF Mono", ui-monospace, monospace;
   font-size: 11px;
   user-select: text;
 }
-.console__line { white-space: pre-wrap; color: #3a4150; }
+.console__line { white-space: pre-wrap; color: var(--text-2); }
 
 .device__cmd { display: flex; gap: 6px; padding: 10px 12px; }
 .device__cmd input { flex: 1; font-family: "SF Mono", ui-monospace, monospace; }
@@ -254,7 +271,7 @@ input[type="number"] { width: 64px; }
 .modal__scrim {
   position: fixed;
   inset: 0;
-  background: rgba(20, 24, 32, 0.35);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -267,7 +284,7 @@ input[type="number"] { width: 64px; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(20, 24, 32, 0.25);
+  box-shadow: var(--shadow-modal);
 }
 .modal__head {
   display: flex;
@@ -307,7 +324,7 @@ input[type="number"] { width: 64px; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 50% 30%, #ffffff, #e2e5ea);
+  background: radial-gradient(circle at 50% 30%, var(--onboard-a), var(--onboard-b));
 }
 .onboard__card {
   width: 520px;
@@ -317,13 +334,13 @@ input[type="number"] { width: 64px; }
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 28px 32px;
-  box-shadow: 0 24px 80px rgba(20, 24, 32, 0.22);
+  box-shadow: var(--shadow-card);
 }
 .onboard__brand { font-weight: 600; color: var(--muted); margin-bottom: 12px; }
 .onboard__icon { color: var(--accent); }
 .onboard h1 { font-size: 22px; margin: 0 0 12px; }
-.onboard p { color: #3a4150; line-height: 1.5; }
-.onboard__safety { color: #3a4150; line-height: 1.5; padding-left: 18px; }
+.onboard p { color: var(--text-2); line-height: 1.5; }
+.onboard__safety { color: var(--text-2); line-height: 1.5; padding-left: 18px; }
 .onboard__safety li { margin: 6px 0; }
 .onboard__ack { display: flex; align-items: center; gap: 8px; margin: 16px 0; }
 .onboard__nav { display: flex; justify-content: space-between; margin-top: 20px; }
@@ -345,12 +362,101 @@ input[type="number"] { width: 64px; }
   gap: 12px;
   padding: 8px 14px;
   background: var(--estop);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
 .job-error button {
   background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  color: var(--on-accent);
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
+
+/* ---------------------------------------------------------------- dark ----
+   App.tsx stamps data-theme on <html> as either light or dark (resolving
+   "Auto" against the OS), so only the tokens need redefining here. Canvas
+   colours can't come from CSS — they live in PALETTES in Workspace.tsx. */
+:root[data-theme="dark"] {
+  --bg: #14171d;
+  --panel: #1a1e25;
+  --panel-2: #21262f;
+  --line: #2f3542;
+  --line-strong: #414a5a;
+  --text: #e6e9ef;
+  --text-2: #b3bac7;
+  --muted: #8b93a3;
+  --accent: #4da3ff;
+  --accent-soft: #1d2b3d;
+  --go: #35c46d;
+  --estop: #f2564f;
+  --hold: #e0a02c;
+  --on-accent: #0d1014;
+  --surface: #232833;
+  --surface-hover: #2c323e;
+  --canvas: #0f1216;
+  --console: #12151a;
+  --toolbar-a: #21262f;
+  --toolbar-b: #1a1e25;
+  --onboard-a: #21262f;
+  --onboard-b: #101317;
+  --swatch-ring: rgba(255, 255, 255, 0.25);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+/* The E-STOP and job-error bars keep white text: --on-accent goes dark so
+   normal accent buttons stay readable, but red always wants white on top. */
+:root[data-theme="dark"] .btn--estop,
+:root[data-theme="dark"] .btn--go,
+:root[data-theme="dark"] .job-error {
+  color: #ffffff;
+}
+
+/* macOS renders form controls light-on-light unless told the scheme. */
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] input {
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------- transform additions ---- */
+.xf__section {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin: 10px 0 5px;
+}
+.xf__row { display: flex; gap: 6px; }
+.xf__row button { flex: 1; font-size: 11px; padding: 5px 2px; min-width: 0; white-space: nowrap; }
+.xf__field--angle { flex: 1; min-width: 0; }
+.xf__field--angle input { width: 100%; }
+.xf__rot-btn { flex: 0 0 30px; font-size: 14px; }
+
+.xf__align { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.xf__align-btn {
+  padding: 5px 0;
+  font-size: 14px;
+  line-height: 1;
+  min-width: 0;
+}
+
+.mform__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------- toolbar additions ---- */
+.toolbar__group--history { gap: 4px; }
+.toolbar__icon-btn {
+  width: 28px;
+  padding: 5px 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1;
+}
+.toolbar__theme { -webkit-app-region: no-drag; padding: 4px 6px; }
