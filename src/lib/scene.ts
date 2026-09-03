@@ -16,6 +16,10 @@ export interface SceneObj {
   box: Box;
 
   rot: number;
+
+  /** Mirror about the object's own centre. Applied before rot in toWorld. */
+  flipX: boolean;
+  flipY: boolean;
 }
 
 export function boxCenter(b: Box): [number, number] {
@@ -60,6 +64,8 @@ export function fromImported(o: ImportedObject): SceneObj {
     obb: b,
     box: { ...b },
     rot: 0,
+    flipX: false,
+    flipY: false,
   };
 }
 
@@ -71,8 +77,13 @@ export function toWorld(o: SceneObj): number[][][] {
   const sin = Math.sin(o.rot);
   return o.base.map((poly) =>
     poly.map(([x, y]) => {
-      const wx = o.box.x + (x - o.obb.x) * sx;
-      const wy = o.box.y + (y - o.obb.y) * sy;
+      // Mirror inside the source box, so flip composes with scale and rot
+      // instead of fighting them. A degenerate axis (w or h of 0) has nothing
+      // to mirror and keeps its 1:1 offset.
+      const ox = o.flipX && o.obb.w !== 0 ? o.obb.x + o.obb.w - (x - o.obb.x) : x;
+      const oy = o.flipY && o.obb.h !== 0 ? o.obb.y + o.obb.h - (y - o.obb.y) : y;
+      const wx = o.box.x + (ox - o.obb.x) * sx;
+      const wy = o.box.y + (oy - o.obb.y) * sy;
       if (o.rot === 0) return [wx, wy];
       const dx = wx - cx;
       const dy = wy - cy;
@@ -157,4 +168,12 @@ export function resizeBox(
     h = nh;
   }
   return { x, y, w, h };
+}
+
+/**
+ * Inverse CoreXY: motor words (A, B) back to cartesian (x, y). Mirrors
+ * `corexy_inv` in the Rust gcode module.
+ */
+export function corexyInv(p: [number, number]): [number, number] {
+  return [(p[0] + p[1]) / 2, (p[0] - p[1]) / 2];
 }

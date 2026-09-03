@@ -5,13 +5,19 @@ import {
   generateGcode,
   saveGcode,
   startJob,
+  frameJob,
   pauseJob,
   cancelJob,
   softReset,
+  setTheme as persistTheme,
+  type DocBounds,
+  type Theme,
   type VectorGroup,
   type RasterPlacement,
 } from "../lib/ipc";
 import { fromImported, toWorld } from "../lib/scene";
+
+const THEMES: Theme[] = ["Auto", "Light", "Dark"];
 
 export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void }) {
   const {
@@ -26,42 +32,73 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     pushConsole,
     activeMachine,
     corners,
+    past,
+    future,
+    undo,
+    redo,
+    theme,
+    setTheme,
+    setConfig,
   } = useStore();
 
-  // Block a run whose toolpath would leave the calibrated travel box. Works
-  // in machine coords: job work-coords + the current work offset (mpos-wpos).
+  // Block a move whose path would leave the calibrated travel box. Works in
+  // machine coords: job work-coords + the current work offset (mpos-wpos).
+  // Returns a reason string, or null when the path is safe.
+  function limitViolation(b: DocBounds): string | null {
+    const box = cornerBox(corners);
+    if (!box) return null;
+    const wcoX = status.mpos[0] - status.wpos[0];
+    const wcoY = status.mpos[1] - status.wpos[1];
+    // include the origin (0,0) — jobs travel through it and park there.
+    const lo = (v: number, w: number) => Math.min(v, 0) + w;
+    const hi = (v: number, w: number) => Math.max(v, 0) + w;
+    const mnx = lo(b.minX, wcoX);
+    const mxx = hi(b.maxX, wcoX);
+    const mny = lo(b.minY, wcoY);
+    const mxy = hi(b.maxY, wcoY);
+    // tolerance absorbs sub-mm rounding from the measured work offset; the
+    // limit is a point the head physically reached during calibration.
+    const eps = 0.5;
+    if (
+      mnx < box.xmin - eps ||
+      mxx > box.xmax + eps ||
+      mny < box.ymin - eps ||
+      mxy > box.ymax + eps
+    ) {
+      return (
+        `path X[${mnx.toFixed(1)},${mxx.toFixed(1)}] Y[${mny.toFixed(1)},${mxy.toFixed(1)}] ` +
+        `leaves limits X[${box.xmin},${box.xmax}] Y[${box.ymin},${box.ymax}]`
+      );
+    }
+    return null;
+  }
+
   function runJob() {
     if (!gcode) return;
-    const box = cornerBox(corners);
-    if (box) {
-      const b = gcode.bounds;
-      const wcoX = status.mpos[0] - status.wpos[0];
-      const wcoY = status.mpos[1] - status.wpos[1];
-      // include the origin (0,0) — jobs travel through it and park there.
-      const lo = (v: number, w: number) => Math.min(v, 0) + w;
-      const hi = (v: number, w: number) => Math.max(v, 0) + w;
-      const mnx = lo(b.minX, wcoX);
-      const mxx = hi(b.maxX, wcoX);
-      const mny = lo(b.minY, wcoY);
-      const mxy = hi(b.maxY, wcoY);
-      // tolerance absorbs sub-mm rounding from the measured work offset; the
-      // limit is a point the head physically reached during calibration.
-      const eps = 0.5;
-      if (
-        mnx < box.xmin - eps ||
-        mxx > box.xmax + eps ||
-        mny < box.ymin - eps ||
-        mxy > box.ymax + eps
-      ) {
-        pushConsole(
-          `[safety] run blocked — path X[${mnx.toFixed(1)},${mxx.toFixed(1)}] Y[${mny.toFixed(1)},${mxy.toFixed(1)}] ` +
-            `leaves limits X[${box.xmin},${box.xmax}] Y[${box.ymin},${box.ymax}]`,
-        );
-        pushConsole("[safety] move the art inside the bed, or re-set origin");
-        return;
-      }
+    const bad = limitViolation(gcode.bounds);
+    if (bad) {
+      pushConsole(`[safety] run blocked — ${bad}`);
+      pushConsole("[safety] move the art inside the bed, or re-set origin");
+      return;
     }
     startJob(gcode.gcode).catch((e) => pushConsole(`[error] ${e}`));
+  }
+
+  function runFrame() {
+    if (!gcode) return;
+    const bad = limitViolation(gcode.bounds);
+    if (bad) {
+      pushConsole(`[safety] frame blocked — ${bad}`);
+      return;
+    }
+    const feed = activeMachine()?.maxFeed ?? 6000;
+    pushConsole("[frame] tracing job outline with the beam off");
+    frameJob(gcode.bounds, feed).catch((e) => pushConsole(`[error] frame: ${e}`));
+  }
+
+  function onTheme(t: Theme) {
+    setTheme(t);
+    persistTheme(t).then(setConfig).catch((e) => pushConsole(`[error] theme: ${e}`));
   }
 
   async function onImport() {
@@ -94,6 +131,8 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
           x: o.box.x,
           y: o.box.y,
           scale: o.obb.w !== 0 ? o.box.w / o.obb.w : 1,
+          flipX: o.flipX,
+          flipY: o.flipY,
         };
       } else {
         const arr = byLayer.get(o.layerId) ?? [];
@@ -154,10 +193,47 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
           Save G-code…
         </button>
       </div>
+      <div className="toolbar__group toolbar__group--history">
+        <button
+          className="toolbar__icon-btn"
+          onClick={undo}
+          disabled={past.length === 0}
+          title="Undo (⌘Z)"
+        >
+          ↶
+        </button>
+        <button
+          className="toolbar__icon-btn"
+          onClick={redo}
+          disabled={future.length === 0}
+          title="Redo (⇧⌘Z)"
+        >
+          ↷
+        </button>
+      </div>
       <button className="toolbar__machine" onClick={onOpenMachines} title="Manage machines">
         ⚙ {machineName}
       </button>
+      <select
+        className="toolbar__theme"
+        value={theme}
+        onChange={(e) => onTheme(e.target.value as Theme)}
+        title="Colour scheme"
+      >
+        {THEMES.map((t) => (
+          <option key={t} value={t}>
+            {t === "Auto" ? "◐ Auto" : t === "Light" ? "☀ Light" : "☾ Dark"}
+          </option>
+        ))}
+      </select>
       <div className="toolbar__group toolbar__group--run">
+        <button
+          disabled={!connected || !gcode || running}
+          onClick={runFrame}
+          title="Trace the job outline with the beam off to check placement"
+        >
+          ▭ Frame
+        </button>
         <button
           className="btn--go"
           disabled={!connected || !gcode || running}

@@ -114,6 +114,11 @@ pub struct RasterPlacement {
     pub x: f64,
     pub y: f64,
     pub scale: f64,
+
+    #[serde(default)]
+    pub flip_x: bool,
+    #[serde(default)]
+    pub flip_y: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

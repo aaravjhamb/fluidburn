@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useStore } from "../state/store";
 import {
   toWorld,
@@ -12,6 +12,7 @@ import {
   type Handle,
   type SceneObj,
 } from "../lib/scene";
+import { parseToolpath } from "../lib/toolpath";
 
 interface View {
   scale: number;
@@ -21,6 +22,51 @@ interface View {
 
 const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 const HANDLE_HIT = 8;
+
+// Canvas can't read CSS variables, so the drawing colours are kept here and
+// picked by the resolved theme.
+interface Palette {
+  bed: string;
+  gridMinor: string;
+  gridMajor: string;
+  bedEdge: string;
+  disabled: string;
+  select: string;
+  rotate: string;
+  marquee: string;
+  head: string;
+  cut: string;
+  travel: string;
+}
+
+const PALETTES: Record<"light" | "dark", Palette> = {
+  light: {
+    bed: "#ffffff",
+    gridMinor: "#eef1f6",
+    gridMajor: "#dde2ea",
+    bedEdge: "#c2c8d2",
+    disabled: "#b3b9c4",
+    select: "#0a84ff",
+    rotate: "#1aa251",
+    marquee: "#8a93a3",
+    head: "#ff5a7a",
+    cut: "#f0761a",
+    travel: "#b6bdc9",
+  },
+  dark: {
+    bed: "#1b1e25",
+    gridMinor: "#23272f",
+    gridMajor: "#2d323d",
+    bedEdge: "#3c4351",
+    disabled: "#565d6d",
+    select: "#4da3ff",
+    rotate: "#35c46d",
+    marquee: "#6c7484",
+    head: "#ff6b87",
+    cut: "#ff9d4d",
+    travel: "#4a515f",
+  },
+};
 
 function handlePos(b: Box, h: Handle): [number, number] {
   const hx = h.includes("w") ? b.x : h.includes("e") ? b.x + b.w : b.x + b.w / 2;
@@ -62,6 +108,23 @@ export default function Workspace() {
   const duplicateSelected = useStore((s) => s.duplicateSelected);
   const wpos = useStore((s) => s.status.wpos);
   const machine = useStore((s) => s.activeMachine());
+  const snapshot = useStore((s) => s.snapshot);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
+  const gcode = useStore((s) => s.gcode);
+  const showToolpath = useStore((s) => s.showToolpath);
+  const setShowToolpath = useStore((s) => s.setShowToolpath);
+  const theme = useStore((s) => s.resolvedTheme());
+
+  const pal = PALETTES[theme];
+  const corexy = machine?.corexy ?? false;
+
+  // Re-parsing on every pan would be wasteful; only the code and kinematics
+  // change the path.
+  const segs = useMemo(
+    () => (gcode ? parseToolpath(gcode.gcode, corexy) : []),
+    [gcode, corexy],
+  );
 
   const bed = { w: machine?.bedW ?? 400, h: machine?.bedH ?? 400 };
 
@@ -164,7 +227,7 @@ export default function Workspace() {
     const [bx, by] = toScreen(0, 0);
     const bw = bed.w * view.scale;
     const bh = bed.h * view.scale;
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = pal.bed;
     ctx.fillRect(bx, by - bh, bw, bh);
 
     const minor = niceGrid(snapStep, view.scale);
@@ -192,14 +255,14 @@ export default function Workspace() {
       }
       ctx.stroke();
     };
-    gridLines(minor, "#eef1f6");
-    gridLines(major, "#dde2ea");
-    ctx.strokeStyle = "#c2c8d2";
+    gridLines(minor, pal.gridMinor);
+    gridLines(major, pal.gridMajor);
+    ctx.strokeStyle = pal.bedEdge;
     ctx.strokeRect(bx, by - bh, bw, bh);
 
     for (const o of objects) {
       const enabled = layerEnabled(o.layerId);
-      ctx.strokeStyle = enabled ? layerColor(o.layerId) : "#b3b9c4";
+      ctx.strokeStyle = enabled ? layerColor(o.layerId) : pal.disabled;
       ctx.lineWidth = 1.3;
       if (o.raster) ctx.setLineDash([5, 4]);
       for (const poly of toWorld(o)) {
@@ -216,9 +279,32 @@ export default function Workspace() {
       ctx.setLineDash([]);
     }
 
+    // Toolpath preview sits above the art but below the selection overlay, so
+    // you can still see what you're editing. Batched into two paths because a
+    // raster job runs to thousands of segments.
+    if (showToolpath && segs.length > 0) {
+      const stroke = (cut: boolean, style: string, width: number, dash: number[]) => {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        for (const sg of segs) {
+          if (sg.cut !== cut) continue;
+          const [ax, ay] = toScreen(sg.a[0], sg.a[1]);
+          const [bx2, by2] = toScreen(sg.b[0], sg.b[1]);
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx2, by2);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      stroke(false, pal.travel, 0.8, [3, 3]);
+      stroke(true, pal.cut, 1.6, []);
+    }
+
     const ov = overlay();
     if (ov) {
-      ctx.strokeStyle = "#0a84ff";
+      ctx.strokeStyle = pal.select;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
@@ -236,12 +322,12 @@ export default function Workspace() {
       ctx.moveTo(nx, ny);
       ctx.lineTo(rx, ry);
       ctx.stroke();
-      ctx.fillStyle = "#1aa251";
+      ctx.fillStyle = pal.rotate;
       ctx.beginPath();
       ctx.arc(rx, ry, 4, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = "#0a84ff";
+      ctx.fillStyle = pal.select;
       for (const { p } of ov.handles) {
         const [hx, hy] = toScreen(p[0], p[1]);
         ctx.fillRect(hx - 3, hy - 3, 6, 6);
@@ -250,21 +336,21 @@ export default function Workspace() {
 
     if (marquee) {
       const [mx, my] = toScreen(marquee.x, marquee.y + marquee.h);
-      ctx.strokeStyle = "#8a93a3";
+      ctx.strokeStyle = pal.marquee;
       ctx.setLineDash([3, 3]);
       ctx.strokeRect(mx, my, marquee.w * view.scale, marquee.h * view.scale);
       ctx.setLineDash([]);
     }
 
     const [hx, hy] = toScreen(wpos[0], wpos[1]);
-    ctx.strokeStyle = "#ff5a7a";
+    ctx.strokeStyle = pal.head;
     ctx.beginPath();
     ctx.moveTo(hx - 8, hy);
     ctx.lineTo(hx + 8, hy);
     ctx.moveTo(hx, hy - 8);
     ctx.lineTo(hx, hy + 8);
     ctx.stroke();
-  }, [objects, layers, selection, view, marquee, wpos, bed.w, bed.h, snapStep, overlay, layerColor, layerEnabled]);
+  }, [objects, layers, selection, view, marquee, wpos, bed.w, bed.h, snapStep, overlay, layerColor, layerEnabled, pal, segs, showToolpath]);
 
   function near(mm: [number, number], cx: number, cy: number): boolean {
     const [sx, sy] = toScreen(mm[0], mm[1]);
@@ -294,6 +380,7 @@ export default function Workspace() {
     if (ov) {
 
       if (near(ov.rotMm, cx, cy)) {
+        snapshot();
         const sel = objects.filter((o) => selection.includes(o.id));
         const center = ov.single ? boxCenter(ov.single.box) : groupCenter(sel);
         const init: Record<string, { c: [number, number]; rot: number }> = {};
@@ -304,6 +391,7 @@ export default function Workspace() {
 
       for (const { h, p } of ov.handles) {
         if (near(p, cx, cy)) {
+          snapshot();
           if (ov.single) {
             drag.current = {
               kind: "resize1",
@@ -340,6 +428,7 @@ export default function Workspace() {
       const boxes: Record<string, Box> = {};
       selObjs.forEach((o) => (boxes[o.id] = { ...o.box }));
       const g = selectionBounds(selObjs)!;
+      snapshot();
       drag.current = { kind: "move", sx: mx, sy: my, gx: g.x, gy: g.y, boxes };
       return;
     }
@@ -451,7 +540,10 @@ export default function Workspace() {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-      if (e.key === "Delete" || e.key === "Backspace") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.shiftKey ? redo() : undo();
+        e.preventDefault();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
         deleteSelected();
         e.preventDefault();
       } else if ((e.metaKey || e.ctrlKey) && (e.key === "d" || e.key === "c")) {
@@ -465,6 +557,7 @@ export default function Workspace() {
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowDown" ? -step : e.key === "ArrowUp" ? step : 0;
         const { objects: objs, selection: sel } = useStore.getState();
+        if (sel.length > 0) snapshot();
         setObjects(
           objs.map((o) =>
             sel.includes(o.id) ? { ...o, box: { ...o.box, x: o.box.x + dx, y: o.box.y + dy } } : o,
@@ -475,7 +568,7 @@ export default function Workspace() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteSelected, duplicateSelected, setObjects, setSelection, snap, snapStep]);
+  }, [deleteSelected, duplicateSelected, setObjects, setSelection, snap, snapStep, snapshot, undo, redo]);
 
   return (
     <main className="workspace" ref={wrapRef}>
@@ -494,6 +587,15 @@ export default function Workspace() {
           : `${objects.length} object(s) · ${selection.length} selected`}
       </div>
       <div className="workspace__snap">
+        <label title="Overlay the generated toolpath: solid = cut, dashed = travel">
+          <input
+            type="checkbox"
+            checked={showToolpath}
+            onChange={(e) => setShowToolpath(e.target.checked)}
+            disabled={!gcode}
+          />
+          Path
+        </label>
         <label>
           <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
           Snap

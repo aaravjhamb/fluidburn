@@ -4,18 +4,26 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum Origin {
+    #[default]
     FrontLeft,
     FrontRight,
     BackLeft,
     BackRight,
 }
 
-impl Default for Origin {
-    fn default() -> Self {
-        Self::FrontLeft
-    }
+/// UI colour scheme. `Auto` follows the OS appearance.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
+pub enum Theme {
+    #[default]
+    Auto,
+    Light,
+    Dark,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +48,12 @@ pub struct Machine {
     /// correctly. Defaults to false so existing configs keep loading.
     #[serde(default)]
     pub corexy: bool,
+
+    /// GRBL laser mode ($32). Must be on for M4 dynamic power to scale with
+    /// feed rate; with it off GRBL decelerates to a full stop at every speed
+    /// change while the beam keeps burning, which scorches every vertex.
+    #[serde(default = "default_true")]
+    pub laser_mode: bool,
 }
 
 impl Default for Machine {
@@ -55,6 +69,7 @@ impl Default for Machine {
             homing: false,
             baud: 115200,
             corexy: false,
+            laser_mode: true,
         }
     }
 }
@@ -65,6 +80,7 @@ pub struct Config {
     pub machines: Vec<Machine>,
     pub active_id: Option<String>,
     pub onboarded: bool,
+    pub theme: Theme,
 }
 
 impl Config {

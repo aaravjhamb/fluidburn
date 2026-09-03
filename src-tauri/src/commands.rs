@@ -5,9 +5,9 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use crate::cam::boolean::{self, Op};
-use crate::config::{self, Config, Machine};
+use crate::config::{self, Config, Machine, Theme};
 use crate::gcode::fmt;
-use crate::model::{Document, GcodeResult, GenerateInput, ImportResult, Polyline};
+use crate::model::{DocBounds, Document, GcodeResult, GenerateInput, ImportResult, Polyline};
 use crate::serial::{self, Device};
 use crate::{cam, import};
 
@@ -47,10 +47,20 @@ pub fn list_ports() -> Vec<String> {
     serial::list_ports()
 }
 
+/// Lines pushed once the controller announces itself. `$32` is the important
+/// one: GRBL only honours M4 dynamic power while laser mode is on, and without
+/// it the beam keeps burning through every deceleration, scorching vertices.
+fn init_lines(state: &AppState) -> Vec<String> {
+    let cfg = state.config.lock().unwrap();
+    let laser = cfg.active().map(|m| m.laser_mode).unwrap_or(true);
+    vec![format!("$32={}", u8::from(laser))]
+}
+
 #[tauri::command]
 pub fn connect(app: AppHandle, state: State<AppState>, port: String, baud: u32) -> CmdResult<()> {
     sync_corexy(&state);
-    state.device.connect(app, &port, baud).map_err(e)
+    let init = init_lines(&state);
+    state.device.connect(app, &port, baud, init).map_err(e)
 }
 
 #[tauri::command]
@@ -84,6 +94,14 @@ pub fn jog(state: State<AppState>, dx: f64, dy: f64, feed: f64) -> CmdResult<()>
 
 #[tauri::command]
 pub fn start_job(state: State<AppState>, gcode: String) -> CmdResult<()> {
+    state.device.start_job(&gcode).map_err(e)
+}
+
+/// Trace the job's bounding box with the beam off, so the operator can check
+/// placement on the material before committing to a cut.
+#[tauri::command]
+pub fn frame_job(state: State<AppState>, bounds: DocBounds, feed: f64) -> CmdResult<()> {
+    let gcode = cam::frame_gcode(&bounds, feed, active_corexy(&state));
     state.device.start_job(&gcode).map_err(e)
 }
 
@@ -190,6 +208,14 @@ pub fn set_active_machine(
 pub fn set_onboarded(app: AppHandle, state: State<AppState>, value: bool) -> CmdResult<Config> {
     let mut cfg = state.config.lock().unwrap();
     cfg.onboarded = value;
+    config::save(&app, &cfg).map_err(e)?;
+    Ok(cfg.clone())
+}
+
+#[tauri::command]
+pub fn set_theme(app: AppHandle, state: State<AppState>, theme: Theme) -> CmdResult<Config> {
+    let mut cfg = state.config.lock().unwrap();
+    cfg.theme = theme;
     config::save(&app, &cfg).map_err(e)?;
     Ok(cfg.clone())
 }
