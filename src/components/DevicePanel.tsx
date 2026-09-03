@@ -6,14 +6,14 @@ import {
   connect,
   disconnect,
   jog,
-  home,
   unlock,
   setOrigin,
+  gotoOrigin,
   sendLine,
   requestStatus,
 } from "../lib/ipc";
-const JOG_STEPS = [0.1, 1, 10];
-const JOG_FEED = 2000;
+const JOG_STEPS = [1, 10, 50, 100];
+const JOG_FEED = 6000;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
@@ -120,6 +120,11 @@ export default function DevicePanel() {
     pushConsole("[origin] set here — jog into the bed to lock the safe direction");
   }
 
+  function goOrigin() {
+    gotoOrigin().catch((e) => pushConsole(`[error] ${e}`));
+    pushConsole("[origin] returning to work origin (0,0)");
+  }
+
   function captureCorner(key: CornerKey, label: string) {
     const [x, y] = status.mpos;
     setCorner(key, [x, y]);
@@ -197,7 +202,7 @@ export default function DevicePanel() {
             </option>
           ))}
         </select>
-        <button onClick={refresh} disabled={connected} title="Rescan ports">
+        <button className="device__refresh" onClick={refresh} disabled={connected} title="Rescan ports">
           ⟳
         </button>
         <select
@@ -259,7 +264,7 @@ export default function DevicePanel() {
         <div className="jog__pad">
           <button style={{ gridArea: "u" }} disabled={!connected} onClick={() => jogBy(0, step)}>↑</button>
           <button style={{ gridArea: "l" }} disabled={!connected} onClick={() => jogBy(-step, 0)}>←</button>
-          <button style={{ gridArea: "h" }} disabled={!connected} onClick={() => home()} title="Home ($H)">⌂</button>
+          <button className="jog__home" style={{ gridArea: "h" }} disabled={!connected} onClick={goOrigin} title="Go to set origin (work 0,0)">⌂</button>
           <button style={{ gridArea: "r" }} disabled={!connected} onClick={() => jogBy(step, 0)}>→</button>
           <button style={{ gridArea: "d" }} disabled={!connected} onClick={() => jogBy(0, -step)}>↓</button>
         </div>

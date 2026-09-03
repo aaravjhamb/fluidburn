@@ -136,6 +136,12 @@ export const home = () => sendLine("$H");
 export const unlock = () => sendLine("$X");
 // Set the current head position as work origin (G54 X0 Y0) without homing.
 export const setOrigin = () => sendLine("G10 L20 P1 X0 Y0");
+// Rapid back to the work origin set above. Laser off first; absolute mode so a
+// prior relative jog can't redirect it. Two lines = two acks for flow control.
+export const gotoOrigin = async () => {
+  await sendLine("M5 S0");
+  await sendLine("G90 G0 X0 Y0");
+};
 
 export const startJob = (gcode: string) => invoke<void>("start_job", { gcode });
 export const pauseJob = () => invoke<void>("pause_job");

@@ -147,54 +147,78 @@ input[type="number"] { width: 64px; }
 .xf__bool { display: flex; gap: 6px; margin-top: 8px; }
 .xf__bool button { flex: 1; font-size: 11px; padding: 4px 2px; }
 
-.device__conn { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 10px 12px; }
+/* ---- connection ---- */
+.device__conn { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; align-items: center; }
+.device__conn > * { min-width: 0; }          /* let long port names shrink, not overflow */
+.device__conn select { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .device__conn select:first-child { grid-column: 1 / 2; }
+.device__conn > button { white-space: nowrap; }
+.device__refresh { width: 34px; padding: 5px 0; text-align: center; }
 
+/* ---- digital readout ---- */
 .device__dro {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
   background: var(--line);
-  margin: 0 12px;
+  margin: 2px 12px 0;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
-.device__dro > div { display: flex; justify-content: space-between; padding: 6px 10px; background: #fff; font-variant-numeric: tabular-nums; }
-.device__dro label { color: var(--muted); }
+.device__dro > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; background: #fff;
+  font-variant-numeric: tabular-nums; min-width: 0;
+}
+.device__dro label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
+.device__dro span { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 
-.device__jog { padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.device__mpos {
+  display: flex; flex-wrap: wrap; gap: 2px 12px;
+  padding: 6px 12px 10px;
+  font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.device__mpos > span:first-child { text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+
+/* ---- jog ---- */
+.device__jog { padding: 4px 12px 12px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .jog__steps { display: flex; gap: 6px; }
+.jog__steps button { flex: 1; padding: 6px 0; min-width: 0; }
 .jog__pad {
   display: grid;
   grid-template-areas: ". u ." "l h r" ". d .";
-  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 168px;
+  align-self: center;
 }
-.jog__pad button { width: 40px; height: 36px; font-size: 16px; }
+.jog__pad button {
+  aspect-ratio: 1 / 1; width: 100%; height: auto; padding: 0;
+  font-size: 18px; display: flex; align-items: center; justify-content: center;
+}
+.jog__home { color: var(--accent); }
+.jog__home:hover:not(:disabled) { background: #eaf3ff; border-color: var(--accent); }
 .jog__unlock { width: 100%; }
-.jog__origin { width: 100%; }
+.jog__origin { width: 100%; font-weight: 600; }
 .jog__soft {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   font-size: 12px;
   color: var(--muted);
+  padding: 2px 0;
 }
-.jog__soft input { margin: 0; }
+.jog__soft input { margin: 0; flex: none; }
 
-.device__mpos {
-  display: flex;
-  gap: 12px;
-  padding: 2px 12px 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.jog__cal { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-.jog__cal-title { font-size: 12px; color: var(--muted); }
+/* ---- corner calibration ---- */
+.jog__cal { width: 100%; display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.jog__cal-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
 .jog__cal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.jog__cal-grid button { font-size: 11px; padding: 6px 4px; }
+.jog__cal-grid button { font-size: 11px; padding: 7px 4px; min-width: 0; white-space: nowrap; }
 .jog__cal-fit { width: 100%; font-size: 11px; }
 .jog__cal-clear { width: 100%; font-size: 11px; }
 
