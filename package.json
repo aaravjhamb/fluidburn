@@ -1,7 +1,7 @@
 {
   "name": "fluidburn",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Laser CAM + GRBL sender for an Arduino CNC-shield / TMC2209 / LT-80W laser cutter",
   "scripts": {
