@@ -1,7 +1,7 @@
 name: Release
 
-# Build a signed + notarized macOS DMG and attach it to a GitHub Release.
-# Triggered by pushing a version tag, e.g.  git tag v0.1.0 && git push origin v0.1.0
+# Build macOS DMG + Windows installers and attach them to a GitHub Release.
+# Triggered by pushing a version tag, e.g.  git tag v0.4.0 && git push origin v0.4.0
 on:
   push:
     tags:
@@ -9,19 +9,29 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  release-macos:
-    runs-on: macos-latest
+  release:
     permissions:
       contents: write # needed to create the GitHub Release and upload assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust (with Intel + Apple Silicon targets)
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.rust-targets }}
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -37,20 +47,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build & publish DMG (unsigned)
+      - name: Build & publish (unsigned)
         uses: tauri-apps/tauri-action@v0
-        # NOTE: This builds an UNSIGNED, un-notarized DMG (no Apple Developer
-        # Program membership). It works, but macOS Gatekeeper will warn users.
-        # See releaseBody below for the one-time "open anyway" instructions.
-        # To sign later: enroll in the Apple Developer Program, add the
-        # APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
-        # / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID secrets, and pass them
-        # here under `env:`.
+        # NOTE: Both builds are UNSIGNED (no Apple Developer Program / no
+        # Windows code-signing cert). macOS Gatekeeper and Windows SmartScreen
+        # will warn users — see releaseBody for the one-time bypass steps.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Universal binary runs natively on both Apple Silicon and Intel Macs.
-          args: --target universal-apple-darwin
+          args: ${{ matrix.args }}
           tagName: ${{ github.ref_name }}
           releaseName: "FluidBurn ${{ github.ref_name }}"
           releaseDraft: false
@@ -59,12 +64,17 @@ jobs:
             ### Install (macOS)
             1. Download **FluidBurn_*_universal.dmg** below.
             2. Open it and drag **FluidBurn** to **Applications**.
-            3. This build is not signed by Apple, so the first launch needs one extra step:
-               open **Terminal** and run:
+            3. This build is not signed by Apple, so on first launch open **Terminal** and run:
                ```
                xattr -cr /Applications/FluidBurn.app
                ```
-               then open FluidBurn normally. (You only do this once.)
+               then open FluidBurn normally. (One time only.)
 
             > Alternatively: right-click the app → **Open**, and if macOS still blocks it,
             > go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+            ### Install (Windows)
+            1. Download **FluidBurn_*_x64-setup.exe** below (or the `.msi` if you prefer).
+            2. Run it. This build isn't code-signed, so SmartScreen may show
+               "Windows protected your PC" — click **More info → Run anyway**.
+            3. If WebView2 isn't installed, the installer fetches it automatically.
