@@ -68,7 +68,7 @@ export default function App() {
     <div className="app">
       {jobError && (
         <div className="job-error" role="alert">
-          <span>⚠ Job halted — {jobError}</span>
+          <span>⚠ The job stopped — {jobError}</span>
           <button onClick={() => setJobError(null)}>Dismiss</button>
         </div>
       )}

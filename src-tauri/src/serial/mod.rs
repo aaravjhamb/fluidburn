@@ -30,7 +30,7 @@ fn send_init(app: &AppHandle, tx: &Sender<Cmd>, init: &Arc<Mutex<Vec<String>>>) 
         guard.drain(..).collect()
     };
     for l in lines {
-        let _ = app.emit("grbl:console", format!("[init] {l}"));
+        let _ = app.emit("grbl:console", format!("[serial] {l}"));
         let _ = tx.send(Cmd::Line(l, false));
     }
 }
@@ -246,7 +246,7 @@ impl Device {
                             job_active = false;
                             let _ = port.write_all(&[0x18]);
                             let _ = port.flush();
-                            let _ = app.emit("grbl:console", "[job cancelled]".to_string());
+                            let _ = app.emit("grbl:console", "[job] stopped — the rest of the job was thrown away".to_string());
                         }
                         Cmd::Ack(ack) => {
                             if let Some((len, is_job)) = pending.pop_front() {
@@ -264,7 +264,7 @@ impl Device {
                                         let message = error_message(code);
                                         let _ = app.emit(
                                             "grbl:console",
-                                            format!("[job halted: {message}]"),
+                                            format!("[job] stopped by the controller — {message}"),
                                         );
                                         let _ = app.emit("job:error", JobError { code, message });
                                     }
@@ -285,7 +285,7 @@ impl Device {
                                         let _ = app.emit(
                                             "grbl:console",
                                             format!(
-                                                "[job complete in {:.0}s]",
+                                                "[job] finished in {:.0}s",
                                                 job_start.elapsed().as_secs_f64()
                                             ),
                                         );

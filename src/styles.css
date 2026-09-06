@@ -116,7 +116,7 @@ input[type="number"] { width: 64px; }
   border-bottom: 1px solid var(--line);
 }
 .panel--layers { width: 248px; border-right: 1px solid var(--line); overflow-y: auto; }
-.panel--device { width: 300px; border-left: 1px solid var(--line); }
+.panel--device { width: 320px; border-left: 1px solid var(--line); overflow-y: auto; }
 .panel__empty { color: var(--muted); padding: 12px; }
 .panel__estimate { margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--line); color: var(--muted); }
 
@@ -209,7 +209,7 @@ input[type="number"] { width: 64px; }
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   width: 100%;
-  max-width: 168px;
+  max-width: 152px;
   align-self: center;
 }
 .jog__pad button {
@@ -233,7 +233,6 @@ input[type="number"] { width: 64px; }
 
 /* ---- corner calibration ---- */
 .jog__cal { width: 100%; display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
-.jog__cal-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
 .jog__cal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .jog__cal-grid button { font-size: 11px; padding: 7px 4px; min-width: 0; white-space: nowrap; }
 .jog__cal-fit { width: 100%; font-size: 11px; }
@@ -287,14 +286,27 @@ input[type="number"] { width: 64px; }
   box-shadow: var(--shadow-modal);
 }
 .modal__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
+  background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
 .modal__head h2 { margin: 0; font-size: 14px; }
-.modal__actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px; }
+.modal__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
 
 .mlist { list-style: none; margin: 0; padding: 8px; }
 .mlist__empty { color: var(--muted); padding: 16px; text-align: center; }
@@ -315,6 +327,7 @@ input[type="number"] { width: 64px; }
 .mform__row { display: flex; flex-direction: column; gap: 4px; }
 .mform__row span { color: var(--muted); font-size: 11px; }
 .mform__row--wide { grid-column: 1 / -1; }
+.mform__row input[type="number"] { width: 100%; }
 .mform__check { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; }
 .mform__check span { font-size: 12px; }
 
@@ -345,10 +358,43 @@ input[type="number"] { width: 64px; }
 .onboard__ack { display: flex; align-items: center; gap: 8px; margin: 16px 0; }
 .onboard__nav { display: flex; justify-content: space-between; margin-top: 20px; }
 .onboard__nav button:only-child { margin-left: auto; }
-.onboard__dots { display: flex; gap: 6px; justify-content: center; margin-top: 18px; }
-.onboard__dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
-.onboard__dots span.on { background: var(--accent); }
 .onboard .mform { padding: 8px 0; }
+.onboard__lede { color: var(--muted); margin-top: 0; }
+.onboard__aside { color: var(--muted); font-size: 12px; }
+
+.onboard__flow { color: var(--text-2); line-height: 1.5; padding-left: 20px; margin: 0; }
+.onboard__flow li { margin: 8px 0; }
+.onboard__gloss { display: inline-block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+.onboard__rail {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.onboard__rail-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.onboard__rail-step:hover:not(:disabled) { background: var(--panel-2); border-color: transparent; }
+.onboard__rail-step:disabled { opacity: 0.5; }
+.onboard__rail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.onboard__rail-step.done .onboard__rail-dot { background: var(--go); }
+.onboard__rail-step.on { color: var(--text); font-weight: 600; }
+.onboard__rail-step.on .onboard__rail-dot { background: var(--accent); }
 
 .job-error {
   position: absolute;
@@ -460,3 +506,111 @@ input[type="number"] { width: 64px; }
   line-height: 1;
 }
 .toolbar__theme { -webkit-app-region: no-drag; padding: 4px 6px; }
+
+/* ------------------------------------------------ setup-flow additions ---- */
+.mform__row small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.mform__note--tight { margin-top: -4px; }
+.mform code {
+  font-family: "SF Mono", ui-monospace, monospace;
+  font-size: 11px;
+  background: var(--panel-2);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.device__guide {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 12px 10px;
+  padding: 9px 11px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  line-height: 1.4;
+}
+.device__guide--warn {
+  background: color-mix(in srgb, var(--estop) 12%, var(--panel));
+  border-color: var(--estop);
+}
+.device__guide-step {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.device__guide-text { color: var(--text-2); font-size: 12px; }
+.device__guide--warn .device__guide-text { color: var(--text); font-weight: 600; }
+
+.device__section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.device__section-tag { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.device__section--log { padding: 4px 12px 6px; }
+
+.device__hint {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.device__hint--indent { margin-left: 22px; }
+
+/* The panel scrolls as one column; without this the DRO loses a row. */
+.panel--device > * { flex: none; }
+.device__console { height: 132px; min-height: 0; }
+
+/* Stays in view while you scroll down to the buttons it talks about. */
+.device__guide {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 10px;
+  border-width: 1px 0;
+  border-radius: 0;
+}
+
+.jog__soft { padding-bottom: 0; }
+.jog__cal { gap: 8px; }
+.jog__cal-next { border-color: var(--accent); color: var(--accent); }
+.jog__cal-skip { width: 100%; font-size: 11px; }
+
+/* The corner buttons laid out as the bed seen from above. */
+.jog__cal-bed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+}
+.jog__cal-edge {
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.jog__unlock { margin-top: 4px; }
+.device__cmd { padding-bottom: 14px; }
+
+.xf__note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.xf__note--tight { margin: -2px 0 5px; }

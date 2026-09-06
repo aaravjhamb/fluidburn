@@ -4,6 +4,12 @@ import TransformPanel from "./TransformPanel";
 
 const KINDS: CutKind[] = ["Cut", "Engrave", "Score"];
 
+const KIND_HELP: Record<CutKind, string> = {
+  Cut: "Full-power pass meant to go all the way through",
+  Engrave: "Fills the shape in — slower and much lighter",
+  Score: "A single light outline that marks without cutting through",
+};
+
 export default function LayerPanel() {
   const layers = useStore((s) => s.layers);
   const updateLayer = useStore((s) => s.updateLayer);
@@ -14,7 +20,10 @@ export default function LayerPanel() {
       <TransformPanel />
       <h2>Layers</h2>
       {layers.length === 0 && (
-        <p className="panel__empty">Import a file to begin.</p>
+        <p className="panel__empty">
+          Import a file and its layers show up here, one set of power and speed
+          settings each.
+        </p>
       )}
       {layers.map((l) => (
         <div className="layer" key={l.id}>
@@ -23,6 +32,7 @@ export default function LayerPanel() {
               type="checkbox"
               checked={l.enabled}
               onChange={(e) => updateLayer(l.id, { enabled: e.target.checked })}
+              title="Include this layer in the job"
             />
             <span
               className="layer__swatch"
@@ -31,12 +41,13 @@ export default function LayerPanel() {
             <span className="layer__name">{l.name}</span>
           </div>
           <div className="layer__row">
-            <label>Op</label>
+            <label>Action</label>
             <select
               value={l.kind}
               onChange={(e) =>
                 updateLayer(l.id, { kind: e.target.value as CutKind })
               }
+              title={KIND_HELP[l.kind]}
             >
               {KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -46,7 +57,7 @@ export default function LayerPanel() {
             </select>
           </div>
           <div className="layer__row">
-            <label>Power %</label>
+            <label>Power</label>
             <input
               type="number"
               min={0}
@@ -55,7 +66,9 @@ export default function LayerPanel() {
               onChange={(e) =>
                 updateLayer(l.id, { powerPct: Number(e.target.value) })
               }
+              title="Percent of your machine's full-power S value"
             />
+            <span className="layer__unit">%</span>
           </div>
           <div className="layer__row">
             <label>Speed</label>
@@ -64,6 +77,7 @@ export default function LayerPanel() {
               min={1}
               value={l.feed}
               onChange={(e) => updateLayer(l.id, { feed: Number(e.target.value) })}
+              title="How fast the head moves while burning. Slower burns deeper."
             />
             <span className="layer__unit">mm/min</span>
           </div>
@@ -76,13 +90,14 @@ export default function LayerPanel() {
               onChange={(e) =>
                 updateLayer(l.id, { passes: Number(e.target.value) })
               }
+              title="How many times to repeat this layer. Several light passes beat one slow one."
             />
           </div>
         </div>
       ))}
       {gcode && (
         <div className="panel__estimate">
-          ≈ {Math.round(gcode.estSeconds)}s · {gcode.lineCount} lines
+          About {Math.round(gcode.estSeconds)}s to run · {gcode.lineCount} lines
         </div>
       )}
     </aside>

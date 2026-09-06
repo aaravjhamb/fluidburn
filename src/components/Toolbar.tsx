@@ -7,6 +7,7 @@ import {
   startJob,
   frameJob,
   pauseJob,
+  resumeJob,
   cancelJob,
   softReset,
   setTheme as persistTheme,
@@ -18,6 +19,32 @@ import {
 import { fromImported, toWorld } from "../lib/scene";
 
 const THEMES: Theme[] = ["Auto", "Light", "Dark"];
+
+const STATE_LABEL: Record<string, string> = {
+  Disconnected: "Offline",
+  Idle: "Ready",
+  Run: "Cutting",
+  Hold: "Paused",
+  Jog: "Moving",
+  Alarm: "Alarm",
+  Door: "Door open",
+  Home: "Homing",
+  Sleep: "Asleep",
+  Check: "Dry run",
+};
+
+const STATE_HELP: Record<string, string> = {
+  Disconnected: "Not connected to a controller yet",
+  Idle: "Connected and waiting for a job",
+  Run: "A job is running",
+  Hold: "Paused mid-job — press Run to pick up where it stopped",
+  Jog: "The head is moving",
+  Alarm: "The controller has stopped and won't move until you clear the alarm",
+  Door: "The safety door input is open",
+  Home: "Finding the homing switches",
+  Sleep: "The controller has powered down its motors",
+  Check: "Reading the job without firing the beam",
+};
 
 export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void }) {
   const {
@@ -41,23 +68,23 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     setConfig,
   } = useStore();
 
-  // Block a move whose path would leave the calibrated travel box. Works in
-  // machine coords: job work-coords + the current work offset (mpos-wpos).
-  // Returns a reason string, or null when the path is safe.
+  // Block a job whose path would leave the mapped travel area. Works in
+  // controller coords: the job's coordinates relative to job zero, plus the
+  // current offset between the two. Returns a reason, or null when it's safe.
   function limitViolation(b: DocBounds): string | null {
     const box = cornerBox(corners);
     if (!box) return null;
     const wcoX = status.mpos[0] - status.wpos[0];
     const wcoY = status.mpos[1] - status.wpos[1];
-    // include the origin (0,0) — jobs travel through it and park there.
+    // include job zero (0,0) — jobs travel through it and park there.
     const lo = (v: number, w: number) => Math.min(v, 0) + w;
     const hi = (v: number, w: number) => Math.max(v, 0) + w;
     const mnx = lo(b.minX, wcoX);
     const mxx = hi(b.maxX, wcoX);
     const mny = lo(b.minY, wcoY);
     const mxy = hi(b.maxY, wcoY);
-    // tolerance absorbs sub-mm rounding from the measured work offset; the
-    // limit is a point the head physically reached during calibration.
+    // tolerance absorbs sub-mm rounding in the measured offset; each limit is
+    // a point the head physically reached while the corners were mapped.
     const eps = 0.5;
     if (
       mnx < box.xmin - eps ||
@@ -66,8 +93,9 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
       mxy > box.ymax + eps
     ) {
       return (
-        `path X[${mnx.toFixed(1)},${mxx.toFixed(1)}] Y[${mny.toFixed(1)},${mxy.toFixed(1)}] ` +
-        `leaves limits X[${box.xmin},${box.xmax}] Y[${box.ymin},${box.ymax}]`
+        `it needs X ${mnx.toFixed(1)} to ${mxx.toFixed(1)} and ` +
+        `Y ${mny.toFixed(1)} to ${mxy.toFixed(1)}, but the head can only reach ` +
+        `X ${box.xmin} to ${box.xmax} and Y ${box.ymin} to ${box.ymax}`
       );
     }
     return null;
@@ -77,8 +105,10 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     if (!gcode) return;
     const bad = limitViolation(gcode.bounds);
     if (bad) {
-      pushConsole(`[safety] run blocked — ${bad}`);
-      pushConsole("[safety] move the art inside the bed, or re-set origin");
+      pushConsole(`[limits] run blocked — ${bad}`);
+      pushConsole(
+        "[limits] move the design further onto the bed, or jog somewhere with more room and set job zero again",
+      );
       return;
     }
     startJob(gcode.gcode).catch((e) => pushConsole(`[error] ${e}`));
@@ -88,17 +118,17 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     if (!gcode) return;
     const bad = limitViolation(gcode.bounds);
     if (bad) {
-      pushConsole(`[safety] frame blocked — ${bad}`);
+      pushConsole(`[limits] framing blocked — ${bad}`);
       return;
     }
     const feed = activeMachine()?.maxFeed ?? 6000;
-    pushConsole("[frame] tracing job outline with the beam off");
-    frameJob(gcode.bounds, feed).catch((e) => pushConsole(`[error] frame: ${e}`));
+    pushConsole("[frame] tracing the job outline with the beam off");
+    frameJob(gcode.bounds, feed).catch((e) => pushConsole(`[error] framing failed: ${e}`));
   }
 
   function onTheme(t: Theme) {
     setTheme(t);
-    persistTheme(t).then(setConfig).catch((e) => pushConsole(`[error] theme: ${e}`));
+    persistTheme(t).then(setConfig).catch((e) => pushConsole(`[error] could not save the theme: ${e}`));
   }
 
   async function onImport() {
@@ -112,9 +142,9 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     try {
       const r = await importFile(path);
       loadScene(r.docId, r.layers, r.objects.map(fromImported));
-      pushConsole(`[import] ${path.split("/").pop()} → ${r.objects.length} object(s)`);
+      pushConsole(`[import] ${path.split("/").pop()} — ${r.objects.length} object(s)`);
     } catch (e) {
-      pushConsole(`[error] import: ${e}`);
+      pushConsole(`[error] could not import that file: ${e}`);
     }
   }
 
@@ -155,9 +185,11 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
         maxPower: machine?.maxPower ?? 1000,
       });
       setGcode(r);
-      pushConsole(`[cam] ${r.lineCount} lines, est ${Math.round(r.estSeconds)}s`);
+      pushConsole(
+        `[gcode] ready — ${r.lineCount} lines, about ${Math.round(r.estSeconds)}s to run`,
+      );
     } catch (e) {
-      pushConsole(`[error] generate: ${e}`);
+      pushConsole(`[error] could not generate G-code: ${e}`);
     }
   }
 
@@ -170,14 +202,16 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     if (!path) return;
     try {
       await saveGcode(path, gcode.gcode);
-      pushConsole(`[save] ${path}`);
+      pushConsole(`[save] G-code written to ${path}`);
     } catch (e) {
-      pushConsole(`[error] save: ${e}`);
+      pushConsole(`[error] could not save: ${e}`);
     }
   }
 
   const running = status.state === "Run" || status.state === "Jog";
-  const machineName = activeMachine()?.name ?? "No machine";
+  // Held still has a job loaded, so Run must not offer to start it over.
+  const held = status.state === "Hold";
+  const machineName = activeMachine()?.name ?? "No machine set up";
 
   return (
     <header className="toolbar">
@@ -185,11 +219,17 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
         <span className="toolbar__icon">◐</span> FluidBurn
       </div>
       <div className="toolbar__group">
-        <button onClick={onImport}>Import…</button>
-        <button onClick={onGenerate} disabled={!docId}>
+        <button onClick={onImport} title="Open an SVG, DXF or image to cut or engrave">
+          Import…
+        </button>
+        <button
+          onClick={onGenerate}
+          disabled={!docId}
+          title="Turn the layers on the left into G-code, using their power and speed settings"
+        >
           Generate G-code
         </button>
-        <button onClick={onSave} disabled={!gcode} title="Export the generated G-code to a file">
+        <button onClick={onSave} disabled={!gcode} title="Write the generated G-code out to a file">
           Save G-code…
         </button>
       </div>
@@ -211,14 +251,14 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
           ↷
         </button>
       </div>
-      <button className="toolbar__machine" onClick={onOpenMachines} title="Manage machines">
+      <button className="toolbar__machine" onClick={onOpenMachines} title="Edit or switch machine profiles">
         ⚙ {machineName}
       </button>
       <select
         className="toolbar__theme"
         value={theme}
         onChange={(e) => onTheme(e.target.value as Theme)}
-        title="Colour scheme"
+        title="Appearance"
       >
         {THEMES.map((t) => (
           <option key={t} value={t}>
@@ -230,34 +270,46 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
         <button
           disabled={!connected || !gcode || running}
           onClick={runFrame}
-          title="Trace the job outline with the beam off to check placement"
+          title="Run a lap around the job outline with the beam off, to check where it will land"
         >
           ▭ Frame
         </button>
         <button
           className="btn--go"
-          disabled={!connected || !gcode || running}
+          disabled={!connected || !gcode || running || held}
           onClick={runJob}
+          title="Start cutting"
         >
           ▶ Run
         </button>
-        <button disabled={!running} onClick={() => pauseJob()}>
-          ❙❙ Hold
+        <button
+          disabled={!running && !held}
+          onClick={() => (held ? resumeJob() : pauseJob()).catch((e) => pushConsole(`[error] ${e}`))}
+          title={
+            held
+              ? "Carry on from where the job stopped"
+              : "Pause — the beam stops and the head holds its place"
+          }
+        >
+          {held ? "▶ Resume" : "❙❙ Hold"}
         </button>
-        <button disabled={!connected} onClick={() => cancelJob()}>
+        <button disabled={!connected} onClick={() => cancelJob()} title="Give up on the job — it cannot be resumed after this">
           ■ Stop
         </button>
         <button
           className="btn--estop"
           disabled={!connected}
           onClick={() => softReset()}
-          title="Soft-reset GRBL (Ctrl-X)"
+          title="Cut power to the beam and reset the controller immediately (Ctrl-X). Not a substitute for a physical E-stop."
         >
           ⏻ E-STOP
         </button>
       </div>
-      <div className={`toolbar__state toolbar__state--${status.state.toLowerCase()}`}>
-        {status.state}
+      <div
+        className={`toolbar__state toolbar__state--${status.state.toLowerCase()}`}
+        title={STATE_HELP[status.state] ?? status.state}
+      >
+        {STATE_LABEL[status.state] ?? status.state}
       </div>
     </header>
   );
