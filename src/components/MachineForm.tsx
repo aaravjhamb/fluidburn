@@ -2,10 +2,10 @@ import type { Machine, Origin } from "../lib/ipc";
 
 // Which corner of the bed the controller treats as X0 Y0.
 export const ORIGINS: { value: Origin; label: string }[] = [
-  { value: "FrontLeft", label: "Front-left — near side, on the left" },
-  { value: "FrontRight", label: "Front-right — near side, on the right" },
-  { value: "BackLeft", label: "Back-left — far side, on the left" },
-  { value: "BackRight", label: "Back-right — far side, on the right" },
+  { value: "FrontLeft", label: "Front-left" },
+  { value: "FrontRight", label: "Front-right" },
+  { value: "BackLeft", label: "Back-left" },
+  { value: "BackRight", label: "Back-right" },
 ];
 
 export function newMachine(): Machine {
@@ -44,12 +44,11 @@ export default function MachineForm({
       {show("size") && (
         <>
           <label className="mform__row mform__row--wide">
-            <span>Machine name</span>
+            <span>Name</span>
             <input value={value.name} onChange={(e) => set({ name: e.target.value })} />
-            <small>Anything you like — it just labels this profile.</small>
           </label>
 
-          <label className="mform__row">
+          <label className="mform__row" title="How far the head can travel, not the size of the frame">
             <span>Bed width — X (mm)</span>
             <input
               type="number"
@@ -57,7 +56,7 @@ export default function MachineForm({
               onChange={(e) => set({ bedW: Number(e.target.value) })}
             />
           </label>
-          <label className="mform__row">
+          <label className="mform__row" title="How far the head can travel, not the size of the frame">
             <span>Bed height — Y (mm)</span>
             <input
               type="number"
@@ -65,13 +64,11 @@ export default function MachineForm({
               onChange={(e) => set({ bedH: Number(e.target.value) })}
             />
           </label>
-          <p className="mform__note mform__note--tight">
-            How far the head can actually travel, not the size of the frame. A
-            rough guess is fine — you can measure it exactly later under{" "}
-            <b>Travel area</b> in the Machine panel.
-          </p>
 
-          <label className="mform__row mform__row--wide">
+          <label
+            className="mform__row mform__row--wide"
+            title="Jog X and Y positive — the corner the head moves away from is the one to pick. Front is the side you stand at."
+          >
             <span>Which corner is X0 Y0?</span>
             <select
               value={value.origin}
@@ -83,19 +80,13 @@ export default function MachineForm({
                 </option>
               ))}
             </select>
-            <small>
-              &ldquo;Near&rdquo; is the side you stand at. To find the answer:
-              stand at the machine and jog X and Y a little in the positive
-              direction — the corner the head moves <i>away</i> from is the one
-              to pick. Most diode lasers are front-left.
-            </small>
           </label>
         </>
       )}
 
       {show("controller") && (
         <>
-          <label className="mform__row">
+          <label className="mform__row" title="Used for rapid moves and framing">
             <span>Top travel speed (mm/min)</span>
             <input
               type="number"
@@ -103,7 +94,7 @@ export default function MachineForm({
               onChange={(e) => set({ maxFeed: Number(e.target.value) })}
             />
           </label>
-          <label className="mform__row">
+          <label className="mform__row" title="Your controller's $30. Layer power percentages scale against it.">
             <span>Full-power S value</span>
             <input
               type="number"
@@ -111,14 +102,8 @@ export default function MachineForm({
               onChange={(e) => set({ maxPower: Number(e.target.value) })}
             />
           </label>
-          <p className="mform__note mform__note--tight">
-            Top speed is used for rapid moves and framing. The S value is
-            whatever your controller's <code>$30</code> is set to — layer
-            power percentages are scaled against it, so 1000 here means
-            <code> S1000</code> is 100&nbsp;%.
-          </p>
 
-          <label className="mform__row mform__row--wide">
+          <label className="mform__row mform__row--wide" title="115200 unless you flashed something else">
             <span>Connection speed (baud)</span>
             <select value={value.baud} onChange={(e) => set({ baud: Number(e.target.value) })}>
               {[115200, 250000, 57600].map((b) => (
@@ -127,24 +112,18 @@ export default function MachineForm({
                 </option>
               ))}
             </select>
-            <small>115200 unless you flashed your board with something else.</small>
           </label>
 
-          <label className="mform__row mform__check">
+          <label className="mform__row mform__check" title="The head can find its own corner with $H">
             <input
               type="checkbox"
               checked={value.homing}
               onChange={(e) => set({ homing: e.target.checked })}
             />
-            <span>My machine has homing switches</span>
+            <span>Has homing switches</span>
           </label>
-          <p className="mform__note mform__note--tight">
-            Tick this if the head can find its own corner with <code>$H</code>.
-            Without switches you set the starting point by hand each session —
-            that's normal, and FluidBurn walks you through it.
-          </p>
 
-          <label className="mform__row mform__check">
+          <label className="mform__row mform__check" title="Both motors move the head diagonally. Off for a normal gantry.">
             <input
               type="checkbox"
               checked={value.corexy}
@@ -152,25 +131,18 @@ export default function MachineForm({
             />
             <span>CoreXY / H-bot belts</span>
           </label>
-          <p className="mform__note mform__note--tight">
-            Only for frames where both motors move the head diagonally. Leave
-            off for a normal gantry where one motor is X and the other is Y.
-          </p>
 
-          <label className="mform__row mform__check">
+          <label
+            className="mform__row mform__check"
+            title="Sets $32=1 so the controller dims the beam as it slows. Leave on for a laser — without it every corner gets a scorched dot."
+          >
             <input
               type="checkbox"
               checked={value.laserMode}
               onChange={(e) => set({ laserMode: e.target.checked })}
             />
-            <span>Laser mode — turn on at connect</span>
+            <span>Laser mode ($32)</span>
           </label>
-          <p className="mform__note mform__note--tight">
-            Leave this on for a laser. It sets <code>$32=1</code>, which makes
-            the controller dim the beam as it slows down. Without it the head
-            stops dead at every corner while the beam keeps burning, leaving a
-            scorched dot at each vertex. Turn it off only if this is a spindle.
-          </p>
         </>
       )}
     </div>
