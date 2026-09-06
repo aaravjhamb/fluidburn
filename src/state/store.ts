@@ -26,10 +26,11 @@ const DEFAULT_STATUS: GrblStatus = {
 let pasteCounter = 0;
 
 // Travel-limit corners captured by jogging, in machine coordinates.
+// Keys are front/back-left/right, as seen standing at the machine.
 export type Corners = Partial<Record<string, [number, number]>>;
-export const CORNER_KEYS = ["TL", "TR", "BL", "BR"] as const;
+export const CORNER_KEYS = ["FL", "FR", "BL", "BR"] as const;
 
-// Axis-aligned box (machine coords) bounding the captured corners, or null.
+// Axis-aligned box (machine coords) bounding the mapped corners, or null.
 export function cornerBox(corners: Corners) {
   const pts = Object.values(corners).filter(Boolean) as [number, number][];
   if (pts.length < CORNER_KEYS.length) return null;

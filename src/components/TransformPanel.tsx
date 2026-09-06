@@ -6,12 +6,12 @@ import type { AlignEdge } from "../state/store";
 const DEG = 180 / Math.PI;
 
 const ALIGN: { edge: AlignEdge; glyph: string; title: string }[] = [
-  { edge: "left", glyph: "⇤", title: "Align left edges" },
-  { edge: "hcenter", glyph: "⇹", title: "Centre horizontally" },
-  { edge: "right", glyph: "⇥", title: "Align right edges" },
-  { edge: "bottom", glyph: "⤓", title: "Align bottom edges" },
-  { edge: "vcenter", glyph: "⇳", title: "Centre vertically" },
-  { edge: "top", glyph: "⤒", title: "Align top edges" },
+  { edge: "left", glyph: "⇤", title: "Line up the left edges of the shapes" },
+  { edge: "hcenter", glyph: "⇹", title: "Line up the centres of the shapes, left to right" },
+  { edge: "right", glyph: "⇥", title: "Line up the right edges of the shapes" },
+  { edge: "bottom", glyph: "⤓", title: "Line up the bottom edges of the shapes" },
+  { edge: "vcenter", glyph: "⇳", title: "Line up the centres of the shapes, top to bottom" },
+  { edge: "top", glyph: "⤒", title: "Line up the top edges of the shapes" },
 ];
 
 export default function TransformPanel() {
@@ -43,7 +43,7 @@ export default function TransformPanel() {
     try {
       const result = await booleanOp(op, boolable.map(toWorld));
       if (result.length === 0) {
-        pushConsole(`[bool] ${op}: empty result`);
+        pushConsole(`[shape] ${op} left nothing behind — the shapes may not overlap`);
         return;
       }
       const b = bbox(result);
@@ -64,7 +64,7 @@ export default function TransformPanel() {
       setObjects([...objects.filter((o) => !removed.has(o.id)), newObj]);
       setSelection([id]);
     } catch (e) {
-      pushConsole(`[error] bool: ${e}`);
+      pushConsole(`[error] could not combine those shapes: ${e}`);
     }
   }
 
@@ -111,25 +111,28 @@ export default function TransformPanel() {
 
   return (
     <div className="xf">
-      <div className="xf__title">Transform · {selection.length} selected</div>
+      <div className="xf__title">
+        Position &amp; size · {selection.length} selected
+      </div>
       <div className="xf__grid">
         {field("X", sb.x, (v) => applyGroup({ ...sb, x: v }))}
         {field("Y", sb.y, (v) => applyGroup({ ...sb, y: v }))}
         {field("W", sb.w, (v) => applyGroup({ ...sb, w: Math.max(0.1, v) }))}
         {field("H", sb.h, (v) => applyGroup({ ...sb, h: Math.max(0.1, v) }))}
       </div>
+      <p className="xf__note">Millimetres, measured out from job zero.</p>
 
-      <div className="xf__section">Flip &amp; rotate</div>
+      <div className="xf__section">Flip and rotate</div>
       <div className="xf__row">
-        <button onClick={() => flipSelection("x")} title="Mirror horizontally">
-          ⇄ Flip H
+        <button onClick={() => flipSelection("x")} title="Mirror the shapes left to right">
+          Flip left-right
         </button>
-        <button onClick={() => flipSelection("y")} title="Mirror vertically">
-          ⇅ Flip V
+        <button onClick={() => flipSelection("y")} title="Mirror the shapes top to bottom">
+          Flip up-down
         </button>
       </div>
       <div className="xf__row">
-        <label className="xf__field xf__field--angle">
+        <label className="xf__field xf__field--angle" title="Rotation in degrees">
           <span>∠</span>
           <input
             type="number"
@@ -174,37 +177,43 @@ export default function TransformPanel() {
           </div>
           {selObjs.length >= 3 && (
             <div className="xf__row">
-              <button onClick={() => distributeSelection("x")} title="Even horizontal gaps">
-                Dist H
+              <button onClick={() => distributeSelection("x")} title="Even out the gaps left to right">
+                Space across
               </button>
-              <button onClick={() => distributeSelection("y")} title="Even vertical gaps">
-                Dist V
+              <button onClick={() => distributeSelection("y")} title="Even out the gaps top to bottom">
+                Space down
               </button>
             </div>
           )}
         </>
       )}
 
-      <div className="xf__section">Bed</div>
+      <div className="xf__section">Place on the bed</div>
+      <p className="xf__note xf__note--tight">
+        The top of this view is the back of your machine.
+      </p>
       <div className="xf__row">
-        <button onClick={() => centerOnBed(bed.w, bed.h)} title="Centre on the bed">
+        <button onClick={() => centerOnBed(bed.w, bed.h)} title="Move to the middle of the bed">
           Centre
         </button>
-        <button onClick={() => fitToBed(bed.w, bed.h)} title="Scale to fill the bed">
-          Fit
+        <button onClick={() => fitToBed(bed.w, bed.h)} title="Scale up or down to fill the bed">
+          Fit to bed
         </button>
       </div>
 
       {boolable.length >= 2 && (
         <div className="xf__bool">
-          <button onClick={() => runBool("union")} title="Merge into one outline">
-            Union
+          <button onClick={() => runBool("union")} title="Merge the shapes into one outline">
+            Merge
           </button>
-          <button onClick={() => runBool("difference")} title="Subtract later from first">
+          <button
+            onClick={() => runBool("difference")}
+            title="Punch the other shapes out of the first one"
+          >
             Subtract
           </button>
-          <button onClick={() => runBool("intersection")} title="Keep overlap only">
-            Intersect
+          <button onClick={() => runBool("intersection")} title="Keep only where they overlap">
+            Overlap
           </button>
         </div>
       )}

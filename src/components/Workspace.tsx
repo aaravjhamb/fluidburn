@@ -583,18 +583,18 @@ export default function Workspace() {
       />
       <div className="workspace__hint">
         {objects.length === 0
-          ? "Import a file to begin · scroll to zoom · alt-drag to pan"
-          : `${objects.length} object(s) · ${selection.length} selected`}
+          ? "Import a file to begin — scroll to zoom, alt-drag to pan"
+          : `${objects.length} object(s), ${selection.length} selected`}
       </div>
       <div className="workspace__snap">
-        <label title="Overlay the generated toolpath: solid = cut, dashed = travel">
+        <label title="Show the path the head will take: solid where it burns, dashed where it moves without cutting">
           <input
             type="checkbox"
             checked={showToolpath}
             onChange={(e) => setShowToolpath(e.target.checked)}
             disabled={!gcode}
           />
-          Path
+          Toolpath
         </label>
         <label>
           <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
@@ -604,7 +604,7 @@ export default function Workspace() {
           value={snapStep}
           onChange={(e) => setSnapStep(Number(e.target.value))}
           disabled={!snap}
-          title="Grid snap step"
+          title="Grid size to snap to"
         >
           {[0.001, 0.01, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20].map((s) => (
             <option key={s} value={s}>

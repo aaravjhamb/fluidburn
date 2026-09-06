@@ -17,19 +17,27 @@ const JOG_FEED = 6000;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
-// The four travel-limit corners, captured by jogging the head to each one.
+// Back row first, so the 2x2 grid reads like the bed seen from above.
 const CORNERS = [
-  { key: "TL", label: "Top-left" },
-  { key: "TR", label: "Top-right" },
-  { key: "BL", label: "Bottom-left" },
-  { key: "BR", label: "Bottom-right" },
+  { key: "BL", label: "Back-left" },
+  { key: "BR", label: "Back-right" },
+  { key: "FL", label: "Front-left" },
+  { key: "FR", label: "Front-right" },
 ] as const;
 type CornerKey = (typeof CORNERS)[number]["key"];
 
-// Soft limit for one axis. `dir` is the captured "into the bed" sign
-// (0 = not yet known). Returns the allowed delta and the (possibly newly
-// learned) direction. Travel is bounded to [0, dir*bed] from the origin, so
-// you can roam the bed but never cross the origin into the rail.
+// Walk the perimeter rather than hopping across the bed.
+const CAPTURE_ORDER: CornerKey[] = ["FL", "FR", "BR", "BL"];
+
+const cornerLabel = (key: CornerKey) =>
+  CORNERS.find((c) => c.key === key)!.label.toLowerCase();
+
+const cornerAside = (key: CornerKey) =>
+  key === "FL" || key === "FR" ? "the side you stand at" : "the far side";
+
+// Keep one axis inside the bed. `dir` is the direction "into the bed", learned
+// from the first jog after job zero (0 = not yet known). Travel is bounded to
+// [0, dir*bed] so you can roam the bed but never cross zero into the rail.
 function clampAxis(
   cur: number,
   d: number,
@@ -63,49 +71,85 @@ export default function DevicePanel() {
     setCorner,
     clearCorners,
     setConfig,
+    gcode,
+    docId,
   } = useStore();
 
   const [step, setStep] = useState(1);
   const [cmd, setCmd] = useState("");
-  const [softLimits, setSoftLimits] = useState(true);
-  const [originSet, setOriginSet] = useState(false);
+  const [guard, setGuard] = useState(true);
+  const [zeroSet, setZeroSet] = useState(false);
+  const [skipMapping, setSkipMapping] = useState(false);
   const dirRef = useRef<[number, number]>([0, 0]);
   const logRef = useRef<HTMLDivElement>(null);
 
   const machine = activeMachine();
-  const calibrated = CORNERS.every((c) => corners[c.key]);
+  const mapped = CORNERS.every((c) => corners[c.key]);
+  const mappedCount = CORNERS.filter((c) => corners[c.key]).length;
   const box = cornerBox(corners);
+  const nextCorner = CAPTURE_ORDER.find((k) => !corners[k]);
 
-  // Jog by (dx, dy), enforcing soft limits. Calibrated corners (real measured
-  // machine positions) take precedence; otherwise fall back to learning the
-  // bed direction from the first jog after setting origin.
+  function guide(): { n: number; text: string; warn?: boolean } {
+    if (!connected)
+      return { n: 1, text: "Pick the port your controller is on, then press Connect." };
+    if (status.state === "Alarm")
+      return {
+        n: 1,
+        text: "The controller is in alarm and won't move. Press Clear alarm below.",
+        warn: true,
+      };
+    if (!mapped && !skipMapping)
+      return {
+        n: 2,
+        text: `Jog the head as far as it goes toward the ${cornerLabel(
+          nextCorner!,
+        )} corner — ${cornerAside(
+          nextCorner!,
+        )} — then press that button under Travel area.`,
+      };
+    if (!zeroSet)
+      return {
+        n: 3,
+        text: "Jog to the spot on your material where the design should start, then press Set job zero here.",
+      };
+    if (!docId) return { n: 4, text: "Ready. Import a file from the toolbar to place your design." };
+    if (!gcode) return { n: 4, text: "Set power and speed per layer, then press Generate G-code." };
+    return { n: 5, text: "Press Frame to trace the outline with the beam off, then Run." };
+  }
+  const g = guide();
+
+  // Mapped corners are measured positions, so they win over the bed size.
   function jogBy(dx: number, dy: number) {
-    if (softLimits && calibrated && box) {
+    if (guard && mapped && box) {
       const mp = status.mpos;
       const adx = clamp(mp[0] + dx, box.xmin, box.xmax) - mp[0];
       const ady = clamp(mp[1] + dy, box.ymin, box.ymax) - mp[1];
       if (Math.abs(adx) < 1e-4 && Math.abs(ady) < 1e-4) {
-        pushConsole("[soft limit] at calibrated edge — move blocked");
+        pushConsole("[limits] blocked — the head is already at the edge of the mapped area");
         return;
       }
       if (Math.abs(adx - dx) > 1e-4 || Math.abs(ady - dy) > 1e-4) {
-        pushConsole(`[soft limit] clamped to ${adx.toFixed(2)},${ady.toFixed(2)}`);
+        pushConsole(
+          `[limits] shortened to X${adx.toFixed(2)} Y${ady.toFixed(2)} to stay inside the mapped area`,
+        );
       }
       jog(adx, ady, JOG_FEED).catch((e) => pushConsole(`[error] ${e}`));
       return;
     }
-    if (softLimits && originSet && machine) {
+    if (guard && zeroSet && machine) {
       const wp = status.wpos;
       const [dirX, dirY] = dirRef.current;
       const x = clampAxis(wp[0], dx, dirX, machine.bedW);
       const y = clampAxis(wp[1], dy, dirY, machine.bedH);
       dirRef.current = [x.dir, y.dir];
       if (Math.abs(x.delta) < 1e-4 && Math.abs(y.delta) < 1e-4) {
-        pushConsole("[soft limit] at bed edge — move blocked");
+        pushConsole("[limits] blocked — the head is a full bed away from job zero");
         return;
       }
       if (Math.abs(x.delta - dx) > 1e-4 || Math.abs(y.delta - dy) > 1e-4) {
-        pushConsole(`[soft limit] clamped to ${x.delta.toFixed(2)},${y.delta.toFixed(2)}`);
+        pushConsole(
+          `[limits] shortened to X${x.delta.toFixed(2)} Y${y.delta.toFixed(2)} to stay on the bed`,
+        );
       }
       jog(x.delta, y.delta, JOG_FEED).catch((e) => pushConsole(`[error] ${e}`));
       return;
@@ -113,40 +157,42 @@ export default function DevicePanel() {
     jog(dx, dy, JOG_FEED).catch((e) => pushConsole(`[error] ${e}`));
   }
 
-  function markOrigin() {
+  function markZero() {
     setOrigin().catch((e) => pushConsole(`[error] ${e}`));
     dirRef.current = [0, 0];
-    setOriginSet(true);
-    pushConsole("[origin] set here — jog into the bed to lock the safe direction");
+    setZeroSet(true);
+    pushConsole("[zero] job zero set at the current position — this spot is now X0 Y0");
+    if (!mapped) {
+      pushConsole("[zero] jog once in each direction so FluidBurn learns which way the bed lies");
+    }
   }
 
-  function goOrigin() {
+  function goZero() {
     gotoOrigin().catch((e) => pushConsole(`[error] ${e}`));
-    pushConsole("[origin] returning to work origin (0,0)");
+    pushConsole("[zero] moving back to job zero");
   }
 
   function captureCorner(key: CornerKey, label: string) {
     const [x, y] = status.mpos;
     setCorner(key, [x, y]);
-    pushConsole(`[limit] ${label} @ machine X${x.toFixed(1)} Y${y.toFixed(1)}`);
+    pushConsole(`[travel] ${label} corner recorded at machine X${x.toFixed(1)} Y${y.toFixed(1)}`);
   }
 
   function resetCorners() {
     clearCorners();
-    pushConsole("[limit] corners cleared");
+    setSkipMapping(false);
+    pushConsole("[travel] mapped corners cleared");
   }
 
-  // Resize the on-screen bed to match the calibrated travel rectangle, so the
-  // workspace square maps onto the four corners you measured.
-  async function fitBedToArea() {
+  async function useAsBedSize() {
     if (!box || !machine) return;
     const w = Math.round((box.xmax - box.xmin) * 10) / 10;
     const h = Math.round((box.ymax - box.ymin) * 10) / 10;
     try {
       const cfg = await saveMachine({ ...machine, bedW: w, bedH: h });
       setConfig(cfg);
-      pushConsole(`[limit] bed set to calibrated area ${w} × ${h} mm`);
-      pushConsole("[limit] jog to the matching corner, then Set origin here");
+      pushConsole(`[travel] bed size updated to the area you mapped: ${w} × ${h} mm`);
+      pushConsole("[travel] now jog to the corner your design should start from and set job zero");
     } catch (e) {
       pushConsole(`[error] ${e}`);
     }
@@ -173,17 +219,24 @@ export default function DevicePanel() {
       if (connected) {
         await disconnect();
         setConnected(false);
-        setOriginSet(false);
+        setZeroSet(false);
+        setSkipMapping(false);
         clearCorners();
       } else if (selectedPort) {
         await connect(selectedPort, baud);
         setConnected(true);
-        pushConsole(`[serial] connected ${selectedPort} @ ${baud}`);
+        pushConsole(`[serial] connected to ${selectedPort} at ${baud} baud`);
       }
     } catch (e) {
       pushConsole(`[error] ${e}`);
     }
   }
+
+  const guardStatus = mapped
+    ? "using the four corners you mapped"
+    : zeroSet
+      ? "using your bed size, measured out from job zero"
+      : "waiting — map the corners or set job zero to give it a reference";
 
   return (
     <aside className="panel panel--device">
@@ -194,25 +247,32 @@ export default function DevicePanel() {
           value={selectedPort ?? ""}
           onChange={(e) => setSelectedPort(e.target.value)}
           disabled={connected}
+          title="The USB serial port your controller shows up on"
         >
-          <option value="">— port —</option>
+          <option value="">— choose a port —</option>
           {ports.map((p) => (
             <option key={p} value={p}>
               {p}
             </option>
           ))}
         </select>
-        <button className="device__refresh" onClick={refresh} disabled={connected} title="Rescan ports">
+        <button
+          className="device__refresh"
+          onClick={refresh}
+          disabled={connected}
+          title="Look for ports again"
+        >
           ⟳
         </button>
         <select
           value={baud}
           onChange={(e) => setBaud(Number(e.target.value))}
           disabled={connected}
+          title="Connection speed — 115200 for most GRBL boards"
         >
           {[115200, 250000, 57600].map((b) => (
             <option key={b} value={b}>
-              {b}
+              {b} baud
             </option>
           ))}
         </select>
@@ -225,7 +285,12 @@ export default function DevicePanel() {
         </button>
       </div>
 
-      <div className="device__dro">
+      <div className={`device__guide${g.warn ? " device__guide--warn" : ""}`}>
+        <span className="device__guide-step">Step {g.n} of 5</span>
+        <span className="device__guide-text">{g.text}</span>
+      </div>
+
+      <div className="device__dro" title="Position relative to job zero — this is what your design is placed against">
         <div>
           <label>X</label>
           <span>{status.wpos[0].toFixed(2)}</span>
@@ -235,101 +300,139 @@ export default function DevicePanel() {
           <span>{status.wpos[1].toFixed(2)}</span>
         </div>
         <div>
-          <label>F</label>
+          <label>Speed</label>
           <span>{status.feed.toFixed(0)}</span>
         </div>
         <div>
-          <label>S</label>
+          <label>Power</label>
           <span>{status.power.toFixed(0)}</span>
         </div>
       </div>
-      <div className="device__mpos" title="Machine position — what corner calibration captures">
-        <span>machine</span>
+      <div
+        className="device__mpos"
+        title="Position as the controller counts it, independent of job zero. This is what mapping the travel area records."
+      >
+        <span>controller</span>
         <span>X {status.mpos[0].toFixed(1)}</span>
         <span>Y {status.mpos[1].toFixed(1)}</span>
       </div>
 
       <div className="device__jog">
-        <div className="jog__steps">
+        <div className="device__section">Move the head</div>
+        <div className="jog__steps" title="How far one press of an arrow moves the head">
           {JOG_STEPS.map((s) => (
             <button
               key={s}
               className={step === s ? "btn--on" : ""}
               onClick={() => setStep(s)}
             >
-              {s}
+              {s} mm
             </button>
           ))}
         </div>
         <div className="jog__pad">
-          <button style={{ gridArea: "u" }} disabled={!connected} onClick={() => jogBy(0, step)}>↑</button>
-          <button style={{ gridArea: "l" }} disabled={!connected} onClick={() => jogBy(-step, 0)}>←</button>
-          <button className="jog__home" style={{ gridArea: "h" }} disabled={!connected} onClick={goOrigin} title="Go to set origin (work 0,0)">⌂</button>
-          <button style={{ gridArea: "r" }} disabled={!connected} onClick={() => jogBy(step, 0)}>→</button>
-          <button style={{ gridArea: "d" }} disabled={!connected} onClick={() => jogBy(0, -step)}>↓</button>
+          <button style={{ gridArea: "u" }} disabled={!connected} onClick={() => jogBy(0, step)} title="Move away from you, toward the back (+Y)">↑</button>
+          <button style={{ gridArea: "l" }} disabled={!connected} onClick={() => jogBy(-step, 0)} title="Move left (−X)">←</button>
+          <button className="jog__home" style={{ gridArea: "h" }} disabled={!connected} onClick={goZero} title="Go back to job zero">⌂</button>
+          <button style={{ gridArea: "r" }} disabled={!connected} onClick={() => jogBy(step, 0)} title="Move right (+X)">→</button>
+          <button style={{ gridArea: "d" }} disabled={!connected} onClick={() => jogBy(0, -step)} title="Move toward you, toward the front (−Y)">↓</button>
         </div>
         <button
           className="jog__origin"
           disabled={!connected}
-          onClick={markOrigin}
-          title="Zero work coordinates at the current head position (G10 L20)"
+          onClick={markZero}
+          title="Make the head's current position X0 Y0 for the job (G10 L20)"
         >
-          Set origin here
+          Set job zero here
         </button>
-        <label className="jog__soft" title="Block jogs that would leave the safe area">
+        <p className="device__hint">
+          {zeroSet
+            ? "Job zero is set. Your design is placed relative to this point."
+            : "Whatever spot you pick becomes the design's X0 Y0 on the material."}
+        </p>
+
+        <label className="jog__soft">
           <input
             type="checkbox"
-            checked={softLimits}
-            onChange={(e) => setSoftLimits(e.target.checked)}
+            checked={guard}
+            onChange={(e) => setGuard(e.target.checked)}
           />
-          <span>
-            Soft limits{" "}
-            {softLimits &&
-              (calibrated
-                ? "· corners set"
-                : originSet
-                  ? "· armed (jog-learned)"
-                  : "· calibrate corners")}
-          </span>
+          <span>Stop jogs at the edge of the bed</span>
         </label>
+        {guard && <p className="device__hint device__hint--indent">{guardStatus}</p>}
 
         <div className="jog__cal">
-          <div className="jog__cal-title">
-            Corner limits{calibrated ? " ✓" : ` (${Object.keys(corners).length}/4)`}
+          <div className="device__section">
+            Travel area
+            <span className="device__section-tag">
+              {mapped ? "all 4 corners mapped ✓" : `${mappedCount} of 4 corners`}
+            </span>
           </div>
-          <div className="jog__cal-grid">
+          <p className="device__hint">
+            Optional, but it's what makes the edge guard reliable. Jog the head
+            as far as it will go toward a corner, then press that corner to
+            record where it stopped.
+          </p>
+          <div className="jog__cal-bed">
+            <div className="jog__cal-edge">back — the far side</div>
+            <div className="jog__cal-grid">
             {CORNERS.map((c) => (
               <button
                 key={c.key}
-                className={corners[c.key] ? "btn--on" : ""}
+                className={
+                  corners[c.key]
+                    ? "btn--on"
+                    : c.key === nextCorner
+                      ? "jog__cal-next"
+                      : ""
+                }
                 disabled={!connected}
                 onClick={() => captureCorner(c.key, c.label)}
-                title={`Jog the head to the ${c.label.toLowerCase()} extent, then capture it`}
+                title={`Record the head's current position as the ${c.label.toLowerCase()} limit of travel`}
               >
                 {corners[c.key] ? "✓ " : ""}
                 {c.label}
               </button>
             ))}
+            </div>
+            <div className="jog__cal-edge">front — the side you stand at</div>
           </div>
           <button
             className="jog__cal-fit"
-            disabled={!calibrated || !machine}
-            onClick={fitBedToArea}
-            title="Resize the workspace square to the calibrated travel area"
+            disabled={!mapped || !machine}
+            onClick={useAsBedSize}
+            title="Replace the bed size in your machine profile with the area you just measured"
           >
-            Fit bed to area
+            Use this as my bed size
           </button>
+          {!mapped && !skipMapping && connected && (
+            <button
+              className="jog__cal-skip"
+              onClick={() => {
+                setSkipMapping(true);
+                pushConsole("[travel] mapping skipped — the edge guard will use your bed size instead");
+              }}
+              title="Carry on without mapping. The edge guard falls back to your configured bed size."
+            >
+              Skip for now
+            </button>
+          )}
           <button
             className="jog__cal-clear"
-            disabled={!Object.keys(corners).length}
+            disabled={!Object.keys(corners).length && !skipMapping}
             onClick={resetCorners}
           >
-            Clear corners
+            Start over
           </button>
         </div>
 
-        <button className="jog__unlock" disabled={!connected} onClick={() => unlock()}>
-          Unlock ($X)
+        <button
+          className="jog__unlock"
+          disabled={!connected}
+          onClick={() => unlock()}
+          title="Clear a GRBL alarm so the machine will move again ($X)"
+        >
+          Clear alarm
         </button>
       </div>
 
@@ -340,11 +443,12 @@ export default function DevicePanel() {
             style={{ width: `${(progress.sent / Math.max(1, progress.total)) * 100}%` }}
           />
           <span>
-            {progress.sent}/{progress.total} · {progress.elapsed.toFixed(0)}s
+            {progress.sent} of {progress.total} lines · {progress.elapsed.toFixed(0)}s
           </span>
         </div>
       )}
 
+      <div className="device__section device__section--log">Controller log</div>
       <div className="device__console" ref={logRef}>
         {log.map((line, i) => (
           <div key={i} className="console__line">
@@ -365,8 +469,9 @@ export default function DevicePanel() {
         <input
           value={cmd}
           onChange={(e) => setCmd(e.target.value)}
-          placeholder="$$  $H  G0 X10…"
+          placeholder="Send a raw command — $$, $H, G0 X10…"
           disabled={!connected}
+          title="For GRBL commands FluidBurn has no button for"
         />
         <button type="submit" disabled={!connected}>
           Send

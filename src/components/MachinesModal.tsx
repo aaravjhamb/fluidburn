@@ -27,7 +27,7 @@ export default function MachinesModal({ onClose }: { onClose: () => void }) {
     <div className="modal__scrim" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
-          <h2>Machines</h2>
+          <h2>Machine profiles</h2>
           <button onClick={onClose}>✕</button>
         </div>
 
@@ -37,14 +37,18 @@ export default function MachinesModal({ onClose }: { onClose: () => void }) {
             <div className="modal__actions">
               <button onClick={() => setEditing(null)}>Cancel</button>
               <button className="btn--go" onClick={commit}>
-                Save machine
+                Save
               </button>
             </div>
           </>
         ) : (
           <>
             <ul className="mlist">
-              {machines.length === 0 && <li className="mlist__empty">No machines yet.</li>}
+              {machines.length === 0 && (
+                <li className="mlist__empty">
+                  No machines yet — add one to tell FluidBurn about your laser.
+                </li>
+              )}
               {machines.map((m) => (
                 <li key={m.id} className="mlist__item">
                   <label className="mlist__pick">
@@ -52,6 +56,7 @@ export default function MachinesModal({ onClose }: { onClose: () => void }) {
                       type="radio"
                       checked={activeId === m.id}
                       onChange={() => activate(m.id)}
+                      title="Use this machine"
                     />
                     <span className="mlist__name">{m.name}</span>
                     <span className="mlist__meta">
@@ -67,7 +72,7 @@ export default function MachinesModal({ onClose }: { onClose: () => void }) {
             </ul>
             <div className="modal__actions">
               <button className="btn--go" onClick={() => setEditing(newMachine())}>
-                + Add machine
+                + Add a machine
               </button>
             </div>
           </>
