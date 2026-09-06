@@ -32,9 +32,6 @@ const CAPTURE_ORDER: CornerKey[] = ["FL", "FR", "BR", "BL"];
 const cornerLabel = (key: CornerKey) =>
   CORNERS.find((c) => c.key === key)!.label.toLowerCase();
 
-const cornerAside = (key: CornerKey) =>
-  key === "FL" || key === "FR" ? "the side you stand at" : "the far side";
-
 // Keep one axis inside the bed. `dir` is the direction "into the bed", learned
 // from the first jog after job zero (0 = not yet known). Travel is bounded to
 // [0, dir*bed] so you can roam the bed but never cross zero into the rail.
@@ -90,31 +87,16 @@ export default function DevicePanel() {
   const nextCorner = CAPTURE_ORDER.find((k) => !corners[k]);
 
   function guide(): { n: number; text: string; warn?: boolean } {
-    if (!connected)
-      return { n: 1, text: "Pick the port your controller is on, then press Connect." };
+    if (!connected) return { n: 1, text: "Pick your controller's port and press Connect." };
     if (status.state === "Alarm")
-      return {
-        n: 1,
-        text: "The controller is in alarm and won't move. Press Clear alarm below.",
-        warn: true,
-      };
+      return { n: 1, text: "Controller is in alarm — press Clear alarm.", warn: true };
     if (!mapped && !skipMapping)
-      return {
-        n: 2,
-        text: `Jog the head as far as it goes toward the ${cornerLabel(
-          nextCorner!,
-        )} corner — ${cornerAside(
-          nextCorner!,
-        )} — then press that button under Travel area.`,
-      };
+      return { n: 2, text: `Jog to the ${cornerLabel(nextCorner!)} corner, then press it below.` };
     if (!zeroSet)
-      return {
-        n: 3,
-        text: "Jog to the spot on your material where the design should start, then press Set job zero here.",
-      };
-    if (!docId) return { n: 4, text: "Ready. Import a file from the toolbar to place your design." };
-    if (!gcode) return { n: 4, text: "Set power and speed per layer, then press Generate G-code." };
-    return { n: 5, text: "Press Frame to trace the outline with the beam off, then Run." };
+      return { n: 3, text: "Jog to where the design starts, then Set job zero here." };
+    if (!docId) return { n: 4, text: "Import a file from the toolbar." };
+    if (!gcode) return { n: 4, text: "Set layer power and speed, then Generate G-code." };
+    return { n: 5, text: "Frame to check placement, then Run." };
   }
   const g = guide();
 
@@ -345,13 +327,7 @@ export default function DevicePanel() {
         >
           Set job zero here
         </button>
-        <p className="device__hint">
-          {zeroSet
-            ? "Job zero is set. Your design is placed relative to this point."
-            : "Whatever spot you pick becomes the design's X0 Y0 on the material."}
-        </p>
-
-        <label className="jog__soft">
+        <label className="jog__soft" title={guardStatus}>
           <input
             type="checkbox"
             checked={guard}
@@ -359,22 +335,16 @@ export default function DevicePanel() {
           />
           <span>Stop jogs at the edge of the bed</span>
         </label>
-        {guard && <p className="device__hint device__hint--indent">{guardStatus}</p>}
 
         <div className="jog__cal">
           <div className="device__section">
             Travel area
             <span className="device__section-tag">
-              {mapped ? "all 4 corners mapped ✓" : `${mappedCount} of 4 corners`}
+              {mapped ? "4/4 ✓" : `${mappedCount}/4`}
             </span>
           </div>
-          <p className="device__hint">
-            Optional, but it's what makes the edge guard reliable. Jog the head
-            as far as it will go toward a corner, then press that corner to
-            record where it stopped.
-          </p>
-          <div className="jog__cal-bed">
-            <div className="jog__cal-edge">back — the far side</div>
+          <div className="jog__cal-bed" title="Jog the head as far as it will go toward a corner, then press that corner">
+            <div className="jog__cal-edge">back</div>
             <div className="jog__cal-grid">
             {CORNERS.map((c) => (
               <button
@@ -395,7 +365,7 @@ export default function DevicePanel() {
               </button>
             ))}
             </div>
-            <div className="jog__cal-edge">front — the side you stand at</div>
+            <div className="jog__cal-edge">front — nearest you</div>
           </div>
           <button
             className="jog__cal-fit"

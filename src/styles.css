@@ -360,11 +360,9 @@ input[type="number"] { width: 64px; }
 .onboard__nav button:only-child { margin-left: auto; }
 .onboard .mform { padding: 8px 0; }
 .onboard__lede { color: var(--muted); margin-top: 0; }
-.onboard__aside { color: var(--muted); font-size: 12px; }
 
 .onboard__flow { color: var(--text-2); line-height: 1.5; padding-left: 20px; margin: 0; }
 .onboard__flow li { margin: 8px 0; }
-.onboard__gloss { display: inline-block; margin-top: 4px; font-size: 12px; color: var(--muted); }
 
 .onboard__rail {
   display: flex;
@@ -488,14 +486,6 @@ input[type="number"] { width: 64px; }
   min-width: 0;
 }
 
-.mform__note {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
 /* ---------------------------------------------------- toolbar additions ---- */
 .toolbar__group--history { gap: 4px; }
 .toolbar__icon-btn {
@@ -508,20 +498,6 @@ input[type="number"] { width: 64px; }
 .toolbar__theme { -webkit-app-region: no-drag; padding: 4px 6px; }
 
 /* ------------------------------------------------ setup-flow additions ---- */
-.mform__row small {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
-.mform__note--tight { margin-top: -4px; }
-.mform code {
-  font-family: "SF Mono", ui-monospace, monospace;
-  font-size: 11px;
-  background: var(--panel-2);
-  border-radius: 3px;
-  padding: 1px 2px;
-}
-
 .device__guide {
   display: flex;
   flex-direction: column;
@@ -561,14 +537,6 @@ input[type="number"] { width: 64px; }
 .device__section-tag { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .device__section--log { padding: 4px 12px 6px; }
 
-.device__hint {
-  margin: -4px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.device__hint--indent { margin-left: 22px; }
-
 /* The panel scrolls as one column; without this the DRO loses a row. */
 .panel--device > * { flex: none; }
 .device__console { height: 132px; min-height: 0; }
@@ -607,10 +575,3 @@ input[type="number"] { width: 64px; }
 .jog__unlock { margin-top: 4px; }
 .device__cmd { padding-bottom: 14px; }
 
-.xf__note {
-  margin: 6px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.xf__note--tight { margin: -2px 0 5px; }

@@ -48,40 +48,32 @@ export default function Onboarding() {
             <h1>Let's get your laser set up</h1>
             <p>
               FluidBurn turns drawings and images into laser G-code and sends it
-              to your GRBL controller over USB.
+              to your GRBL controller over USB. The next few screens ask for your
+              bed size and a couple of controller settings — nothing here moves
+              the machine.
             </p>
-            <p>
-              The next few screens ask for your bed size and a couple of
-              controller settings. Nothing here moves the machine — you'll do
-              that yourself, step by step, once the app opens.
-            </p>
-            <p className="onboard__aside">Takes about two minutes.</p>
             <div className="onboard__nav">{next(1, "Start →")}</div>
           </>
         )}
 
         {step === 1 && (
           <>
-            <h1>Before anything else — safety</h1>
-            <p>A cutting laser will blind you and start fires. Please read these.</p>
+            <h1>Safety first</h1>
             <ul className="onboard__safety">
               <li>
-                <b>Goggles, always.</b> Rated for your laser's wavelength
-                (about 450&nbsp;nm for a blue diode). A reflection off the
-                material blinds you just as fast as the beam.
+                <b>Goggles, always.</b> Rated for your wavelength (~450&nbsp;nm
+                for a blue diode). Reflections blind too.
               </li>
               <li>
-                <b>Enclose it and extract the fumes.</b> Cutting releases smoke
-                you should not be breathing.
+                <b>Enclose it and extract the fumes.</b>
               </li>
               <li>
                 <b>Never walk away from a running job.</b> Keep an extinguisher
                 within reach.
               </li>
               <li>
-                <b>Wire a physical E-stop.</b> The E-STOP button in this app
-                talks to the controller over USB — treat it as a convenience,
-                not as your safety system.
+                <b>Wire a physical E-stop.</b> The one in this app goes over USB
+                — it's a convenience, not your safety system.
               </li>
             </ul>
             <label className="onboard__ack">
@@ -108,12 +100,7 @@ export default function Onboarding() {
                 fill in. You can edit it any time from the toolbar.
               </p>
             ) : (
-              <>
-                <p className="onboard__lede">
-                  Two numbers and one corner. Both are easy to change later.
-                </p>
-                <MachineForm value={machine} onChange={setMachine} section="size" />
-              </>
+              <MachineForm value={machine} onChange={setMachine} section="size" />
             )}
             <div className="onboard__nav">
               {back(1)}
@@ -130,8 +117,7 @@ export default function Onboarding() {
             ) : (
               <>
                 <p className="onboard__lede">
-                  The defaults suit most Arduino + CNC-shield diode lasers. If
-                  you're unsure, leave them alone.
+                  Defaults suit most Arduino + CNC-shield diode lasers.
                 </p>
                 <MachineForm value={machine} onChange={setMachine} section="controller" />
               </>
@@ -147,39 +133,28 @@ export default function Onboarding() {
           <>
             <h1>How a job runs</h1>
             <p className="onboard__lede">
-              Everything happens in the <b>Machine</b> panel on the right, in
-              this order. It tells you which step you're on as you go.
+              All in the <b>Machine</b> panel, which tells you which step you're
+              on as you go.
             </p>
             <ol className="onboard__flow">
               <li>
-                <b>Connect</b> — pick the USB port your controller is on and
-                press Connect.
+                <b>Connect</b> — pick your controller's USB port.
               </li>
               <li>
-                <b>Map the travel area</b> — jog the head to each of the four
-                corners it can reach and capture them. This teaches FluidBurn
-                where the edges are so it can refuse to drive into them. You can
-                skip it, but it's the safety net.
-                <br />
-                <span className="onboard__gloss">
-                  Corners are named from where you stand: <b>front</b> is the
-                  near side, <b>back</b> is the far side. On screen the bed is
-                  drawn the same way up as you're looking at it, so the top of
-                  the workspace is the back of the machine.
-                </span>
+                <b>Map the travel area</b> — jog to each of the four corners and
+                capture them, so FluidBurn knows where the edges are. Skippable.
               </li>
               <li>
-                <b>Set job zero</b> — jog to the spot on your material where the
-                design should start, then press <i>Set job zero here</i>. That
-                point becomes X0 Y0 for the job.
+                <b>Set job zero</b> — jog to where the design should start on the
+                material. That point becomes X0 Y0.
               </li>
               <li>
-                <b>Import and generate</b> — load an SVG, DXF or image, set the
-                power and speed per layer, then press Generate G-code.
+                <b>Import and generate</b> — load a file, set power and speed per
+                layer, then Generate G-code.
               </li>
               <li>
                 <b>Frame, then run</b> — Frame traces the outline with the beam
-                off so you can check the placement before you commit.
+                off to check placement.
               </li>
             </ol>
             <div className="onboard__nav">

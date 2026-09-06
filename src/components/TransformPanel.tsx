@@ -114,13 +114,12 @@ export default function TransformPanel() {
       <div className="xf__title">
         Position &amp; size · {selection.length} selected
       </div>
-      <div className="xf__grid">
+      <div className="xf__grid" title="Millimetres, measured out from job zero">
         {field("X", sb.x, (v) => applyGroup({ ...sb, x: v }))}
         {field("Y", sb.y, (v) => applyGroup({ ...sb, y: v }))}
         {field("W", sb.w, (v) => applyGroup({ ...sb, w: Math.max(0.1, v) }))}
         {field("H", sb.h, (v) => applyGroup({ ...sb, h: Math.max(0.1, v) }))}
       </div>
-      <p className="xf__note">Millimetres, measured out from job zero.</p>
 
       <div className="xf__section">Flip and rotate</div>
       <div className="xf__row">
@@ -188,10 +187,9 @@ export default function TransformPanel() {
         </>
       )}
 
-      <div className="xf__section">Place on the bed</div>
-      <p className="xf__note xf__note--tight">
-        The top of this view is the back of your machine.
-      </p>
+      <div className="xf__section" title="The top of this view is the back of your machine">
+        Place on the bed
+      </div>
       <div className="xf__row">
         <button onClick={() => centerOnBed(bed.w, bed.h)} title="Move to the middle of the bed">
           Centre
