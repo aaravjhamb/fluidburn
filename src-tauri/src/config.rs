@@ -54,6 +54,15 @@ pub struct Machine {
     /// change while the beam keeps burning, which scorches every vertex.
     #[serde(default = "default_true")]
     pub laser_mode: bool,
+
+    /// Axis acceleration ($120/$121) in mm/s². Only used for time estimates;
+    /// GRBL keeps the real value. Defaults so existing configs keep loading.
+    #[serde(default = "default_accel")]
+    pub accel: f64,
+}
+
+fn default_accel() -> f64 {
+    crate::gcode::DEFAULT_ACCEL
 }
 
 impl Default for Machine {
@@ -70,6 +79,7 @@ impl Default for Machine {
             baud: 115200,
             corexy: false,
             laser_mode: true,
+            accel: default_accel(),
         }
     }
 }

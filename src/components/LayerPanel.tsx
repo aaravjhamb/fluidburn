@@ -1,4 +1,5 @@
 import { useStore } from "../state/store";
+import { formatDuration } from "../lib/time";
 import type { CutKind } from "../lib/ipc";
 import TransformPanel from "./TransformPanel";
 
@@ -97,7 +98,7 @@ export default function LayerPanel() {
       ))}
       {gcode && (
         <div className="panel__estimate">
-          About {Math.round(gcode.estSeconds)}s to run · {gcode.lineCount} lines
+          About {formatDuration(gcode.estSeconds)} to run · {gcode.lineCount} lines
         </div>
       )}
     </aside>

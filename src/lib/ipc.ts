@@ -82,6 +82,8 @@ export interface Machine {
   corexy: boolean;
   /** GRBL laser mode ($32) — required for M4 dynamic power to track feed. */
   laserMode: boolean;
+  /** Axis acceleration ($120/$121), mm/s². Used for time estimates only. */
+  accel: number;
 }
 
 export interface Config {
@@ -95,6 +97,8 @@ export interface GcodeResult {
   gcode: string;
   lineCount: number;
   estSeconds: number;
+  /** Cumulative estimated seconds at evenly spaced line indices. */
+  estProfile: number[];
   bounds: DocBounds;
 }
 
@@ -121,6 +125,10 @@ export interface GenerateInput {
   maxPower: number;
   /** Raster scan-line pitch in mm. Omit or 0 for one row per image pixel. */
   lineIntervalMm?: number;
+  /** Axis acceleration in mm/s², for the time estimate. */
+  accel?: number;
+  /** Serial rate the job will stream at, for the time estimate. */
+  baud?: number;
 }
 
 export const listPorts = () => invoke<string[]>("list_ports");

@@ -21,6 +21,7 @@ export function newMachine(): Machine {
     baud: 115200,
     corexy: false,
     laserMode: true,
+    accel: 500,
   };
 }
 
@@ -104,6 +105,14 @@ export default function MachineForm({
             />
           </label>
           <label className="mform__row">
+            <span>Acceleration (mm/s²)</span>
+            <input
+              type="number"
+              value={value.accel}
+              onChange={(e) => set({ accel: Number(e.target.value) })}
+            />
+          </label>
+          <label className="mform__row">
             <span>Full-power S value</span>
             <input
               type="number"
@@ -112,7 +121,9 @@ export default function MachineForm({
             />
           </label>
           <p className="mform__note mform__note--tight">
-            Top speed is used for rapid moves and framing. The S value is
+            Top speed is used for rapid moves and framing. Acceleration is
+            whatever your controller's <code>$120</code> is set to; it only
+            affects how long FluidBurn thinks a job will take. The S value is
             whatever your controller's <code>$30</code> is set to — layer
             power percentages are scaled against it, so 1000 here means
             <code> S1000</code> is 100&nbsp;%.

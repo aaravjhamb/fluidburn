@@ -1,4 +1,3 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
 import { useStore, cornerBox } from "../state/store";
 import {
   importFile,
@@ -17,6 +16,11 @@ import {
   type RasterPlacement,
 } from "../lib/ipc";
 import { fromImported, toWorld } from "../lib/scene";
+import { formatDuration } from "../lib/time";
+
+// The dialog plugin is only needed once the user clicks Import or Export,
+// so it is loaded on demand instead of sitting in the startup chunk.
+const dialog = () => import("@tauri-apps/plugin-dialog");
 
 const THEMES: Theme[] = ["Auto", "Light", "Dark"];
 
@@ -56,6 +60,7 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
     gcode,
     connected,
     status,
+    baud,
     pushConsole,
     activeMachine,
     corners,
@@ -132,6 +137,7 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
   }
 
   async function onImport() {
+    const { open } = await dialog();
     const path = await open({
       multiple: false,
       filters: [
@@ -183,10 +189,12 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
         travelFeed: machine?.maxFeed ?? 6000,
         dynamicPower: true,
         maxPower: machine?.maxPower ?? 1000,
+        accel: machine?.accel ?? 500,
+        baud,
       });
       setGcode(r);
       pushConsole(
-        `[gcode] ready — ${r.lineCount} lines, about ${Math.round(r.estSeconds)}s to run`,
+        `[gcode] ready — ${r.lineCount} lines, about ${formatDuration(r.estSeconds)} to run`,
       );
     } catch (e) {
       pushConsole(`[error] could not generate G-code: ${e}`);
@@ -195,6 +203,7 @@ export default function Toolbar({ onOpenMachines }: { onOpenMachines: () => void
 
   async function onSave() {
     if (!gcode) return;
+    const { save } = await dialog();
     const path = await save({
       defaultPath: "job.gcode",
       filters: [{ name: "G-code", extensions: ["gcode", "nc", "ngc"] }],

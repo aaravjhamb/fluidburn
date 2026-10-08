@@ -136,6 +136,21 @@ pub struct GenerateInput {
     /// native pixel pitch (one G-code row per pixel row).
     #[serde(default)]
     pub line_interval_mm: f64,
+
+    /// Axis acceleration ($120/$121), mm/s². Only affects the time estimate.
+    #[serde(default = "default_accel")]
+    pub accel: f64,
+    /// Serial rate the job will stream at. Only affects the time estimate.
+    #[serde(default = "default_baud")]
+    pub baud: u32,
+}
+
+fn default_accel() -> f64 {
+    crate::gcode::DEFAULT_ACCEL
+}
+
+fn default_baud() -> u32 {
+    crate::gcode::DEFAULT_BAUD
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -144,5 +159,9 @@ pub struct GcodeResult {
     pub gcode: String,
     pub line_count: usize,
     pub est_seconds: f64,
+    /// Cumulative estimated seconds at evenly spaced line indices; see
+    /// `gcode::Finished::est_profile`. Lets the UI turn "lines acked" into
+    /// "time remaining" without assuming every line takes the same time.
+    pub est_profile: Vec<f64>,
     pub bounds: DocBounds,
 }

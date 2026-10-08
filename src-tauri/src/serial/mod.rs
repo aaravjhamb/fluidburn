@@ -16,6 +16,19 @@ use grbl::{error_message, is_ack, parse_status, AckKind};
 
 const RX_LIMIT: usize = 127;
 
+/// `1h 02m 05s`, `4m 05s` or `42s`, matching the frontend's formatDuration.
+fn fmt_duration(secs: f64) -> String {
+    let total = secs.max(0.0).round() as u64;
+    let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60);
+    if h > 0 {
+        format!("{h}h {m:02}m {s:02}s")
+    } else if m > 0 {
+        format!("{m}m {s:02}s")
+    } else {
+        format!("{s}s")
+    }
+}
+
 /// How long to wait for a welcome banner before pushing init lines anyway.
 const INIT_FALLBACK_MS: u64 = 2500;
 
@@ -181,28 +194,45 @@ impl Device {
                 let mut pending: VecDeque<(usize, bool)> = VecDeque::new();
                 let mut used = 0usize;
                 let mut job_total = 0usize;
+                let mut job_bytes = 0usize;
                 let mut job_done = 0usize;
                 let mut job_start = Instant::now();
                 let mut job_active = false;
+                // Feed-hold time is taken out of `elapsed`, otherwise a pause
+                // would drag the remaining-time estimate with it.
+                let mut paused_at: Option<Instant> = None;
+                let mut paused_total = Duration::ZERO;
+                let mut last_progress = Instant::now();
+                let elapsed_secs = |start: Instant, paused_at: Option<Instant>, paused_total: Duration| {
+                    let paused = paused_total + paused_at.map(|p| p.elapsed()).unwrap_or_default();
+                    start.elapsed().saturating_sub(paused).as_secs_f64()
+                };
 
+                // Character-counting stream: keep GRBL's RX buffer as full as
+                // it can be (RX_LIMIT bytes in flight, newline included), and
+                // hand everything that fits to the OS in one write. Each
+                // write() is a USB CDC transfer, so one per window rather than
+                // one per line. There is deliberately no flush/tcdrain either:
+                // that blocks until the driver has clocked the bytes out, and
+                // the byte count already bounds what can sit in the OS buffer.
                 let flush = |port: &mut Box<dyn serialport::SerialPort>,
                              queue: &mut VecDeque<(String, bool)>,
                              pending: &mut VecDeque<(usize, bool)>,
                              used: &mut usize| {
+                    let mut batch: Vec<u8> = Vec::new();
                     while let Some((line, _)) = queue.front() {
                         let need = line.len() + 1;
                         if *used + need > RX_LIMIT && !pending.is_empty() {
                             break;
                         }
                         let (line, is_job) = queue.pop_front().unwrap();
-                        if port.write_all(line.as_bytes()).is_err()
-                            || port.write_all(b"\n").is_err()
-                        {
-                            return;
-                        }
-                        let _ = port.flush();
+                        batch.extend_from_slice(line.as_bytes());
+                        batch.push(b'\n');
                         pending.push_back((need, is_job));
                         *used += need;
+                    }
+                    if !batch.is_empty() {
+                        let _ = port.write_all(&batch);
                     }
                 };
 
@@ -215,9 +245,13 @@ impl Device {
                         Cmd::Job(lines) => {
                             queue.clear();
                             job_total = lines.len();
+                            job_bytes = lines.iter().map(|l| l.len() + 1).sum();
                             job_done = 0;
                             job_active = true;
                             job_start = Instant::now();
+                            paused_at = None;
+                            paused_total = Duration::ZERO;
+                            last_progress = Instant::now();
                             for l in lines {
                                 queue.push_back((l, true));
                             }
@@ -230,14 +264,29 @@ impl Device {
                         Cmd::Realtime(b) => {
                             let _ = port.write_all(&[b]);
                             let _ = port.flush();
+                            match b {
+                                0x21 if paused_at.is_none() => paused_at = Some(Instant::now()),
+                                0x7e => {
+                                    if let Some(p) = paused_at.take() {
+                                        paused_total += p.elapsed();
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
                         Cmd::Pause => {
                             let _ = port.write_all(&[0x21]);
                             let _ = port.flush();
+                            if paused_at.is_none() {
+                                paused_at = Some(Instant::now());
+                            }
                         }
                         Cmd::Resume => {
                             let _ = port.write_all(&[0x7e]);
                             let _ = port.flush();
+                            if let Some(p) = paused_at.take() {
+                                paused_total += p.elapsed();
+                            }
                         }
                         Cmd::Cancel => {
                             queue.clear();
@@ -272,22 +321,40 @@ impl Device {
                                 }
                                 if is_job && job_active {
                                     job_done += 1;
-                                    let _ = app.emit(
-                                        "job:progress",
-                                        JobProgress {
-                                            sent: job_done,
-                                            total: job_total,
-                                            elapsed: job_start.elapsed().as_secs_f64(),
-                                        },
-                                    );
-                                    if job_done >= job_total {
+                                    let finished = job_done >= job_total;
+                                    // A raster job acks hundreds of lines a second; the
+                                    // UI only needs a handful of updates in that time.
+                                    if finished || last_progress.elapsed() >= Duration::from_millis(100) {
+                                        last_progress = Instant::now();
+                                        let _ = app.emit(
+                                            "job:progress",
+                                            JobProgress {
+                                                sent: job_done,
+                                                total: job_total,
+                                                elapsed: elapsed_secs(job_start, paused_at, paused_total),
+                                            },
+                                        );
+                                    }
+                                    if finished {
                                         job_active = false;
+                                        // Throughput goes in the log on purpose: an
+                                        // 8-bit GRBL tops out around 400 lines/s, so
+                                        // a curvy job averaging more than that is
+                                        // starving the planner no matter how it is
+                                        // sent.
+                                        let secs = elapsed_secs(job_start, paused_at, paused_total);
+                                        let rate = if secs > 0.0 {
+                                            format!(
+                                                " · {:.0} lines/s · {:.1} KB/s",
+                                                job_total as f64 / secs,
+                                                job_bytes as f64 / secs / 1000.0
+                                            )
+                                        } else {
+                                            String::new()
+                                        };
                                         let _ = app.emit(
                                             "grbl:console",
-                                            format!(
-                                                "[job] finished in {:.0}s",
-                                                job_start.elapsed().as_secs_f64()
-                                            ),
+                                            format!("[job] finished in {}{rate}", fmt_duration(secs)),
                                         );
                                     }
                                 }

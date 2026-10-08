@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatDuration, remainingSeconds } from "../lib/time";
 import { useStore, cornerBox } from "../state/store";
 import { saveMachine } from "../lib/ipc";
 import {
@@ -201,6 +202,38 @@ export default function DevicePanel() {
   useEffect(() => {
     logRef.current?.scrollTo(0, logRef.current.scrollHeight);
   }, [log]);
+
+  // Progress events only arrive as GRBL acks lines, which can be seconds
+  // apart on a long move. Between events the clock keeps running locally
+  // (unless the machine is in feed hold), so the readout never looks stuck.
+  const progressAt = useRef(Date.now());
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    progressAt.current = Date.now();
+  }, [progress]);
+  const running = !!progress && progress.sent < progress.total && status.state !== "Hold";
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  let progressPct = 0;
+  let progressLabel = "";
+  let progressTitle = "";
+  if (progress) {
+    progressPct = (progress.sent / Math.max(1, progress.total)) * 100;
+    const gap = running ? (Date.now() - progressAt.current) / 1000 : 0;
+    const elapsed = progress.elapsed + gap;
+    progressTitle = `${progress.sent}/${progress.total} lines acknowledged`;
+    if (progress.sent >= progress.total) {
+      progressLabel = `done in ${formatDuration(progress.elapsed)}`;
+    } else {
+      const left = remainingSeconds({ ...progress, elapsed }, gcode);
+      progressLabel = `${Math.floor(progressPct)}% · ${formatDuration(elapsed)}`;
+      if (left !== null) progressLabel += ` · ~${formatDuration(left)} left`;
+    }
+  }
 
   useEffect(() => {
     if (!connected) return;
@@ -437,14 +470,9 @@ export default function DevicePanel() {
       </div>
 
       {progress && (
-        <div className="device__progress">
-          <div
-            className="device__progress-bar"
-            style={{ width: `${(progress.sent / Math.max(1, progress.total)) * 100}%` }}
-          />
-          <span>
-            {progress.sent} of {progress.total} lines · {progress.elapsed.toFixed(0)}s
-          </span>
+        <div className="device__progress" title={progressTitle}>
+          <div className="device__progress-bar" style={{ width: `${progressPct}%` }} />
+          <span>{progressLabel}</span>
         </div>
       )}
 

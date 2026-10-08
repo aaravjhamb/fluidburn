@@ -9,6 +9,7 @@ use crate::model::{
 pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>, corexy: bool) -> GcodeResult {
     let mut g = GcodeBuilder::new(input.travel_feed);
     g.set_corexy(corexy);
+    g.set_timing(input.accel, input.baud);
     let mut all_pts: Vec<Polyline> = Vec::new();
 
     for layer in input.layers.iter().filter(|l| l.enabled) {
@@ -25,11 +26,12 @@ pub fn generate(input: &GenerateInput, raster: Option<&RasterImage>, corexy: boo
         }
     }
 
-    let (gcode, line_count, est_seconds) = g.finish();
+    let f = g.finish();
     GcodeResult {
-        gcode,
-        line_count,
-        est_seconds,
+        gcode: f.gcode,
+        line_count: f.lines,
+        est_seconds: f.est_seconds,
+        est_profile: f.est_profile,
         bounds: DocBounds::of(&all_pts),
     }
 }
@@ -49,7 +51,64 @@ pub fn frame_gcode(b: &DocBounds, feed: f64, corexy: bool) -> String {
     ] {
         g.travel(p);
     }
-    g.finish().0
+    g.finish().gcode
+}
+
+/// Chord tolerance for thinning imported curves before they become G-code.
+/// The importers flatten béziers with a fixed step count, so a small curve
+/// turns into dozens of segments a few hundredths of a millimetre long. GRBL
+/// on an 8-bit board only plans a few hundred blocks a second, and once lines
+/// arrive slower than the head gets through them the planner starves and the
+/// machine stutters to a stop mid-curve. Half a typical kerf: anything this
+/// close to the true curve is invisible in the cut.
+const CURVE_TOLERANCE_MM: f64 = 0.05;
+
+/// Ramer–Douglas–Peucker: drop vertices that lie within `tol` of the chord
+/// between their kept neighbours. Endpoints always survive, so closed shapes
+/// stay closed and corners are never cut.
+pub fn simplify(poly: &Polyline, tol: f64) -> Polyline {
+    if poly.len() < 3 {
+        return poly.clone();
+    }
+    let mut keep = vec![false; poly.len()];
+    keep[0] = true;
+    keep[poly.len() - 1] = true;
+    let mut stack = vec![(0usize, poly.len() - 1)];
+    while let Some((a, b)) = stack.pop() {
+        if b <= a + 1 {
+            continue;
+        }
+        let (mut idx, mut max) = (a, 0.0);
+        for i in a + 1..b {
+            let d = point_segment_dist(poly[i], poly[a], poly[b]);
+            if d > max {
+                max = d;
+                idx = i;
+            }
+        }
+        if max > tol {
+            keep[idx] = true;
+            stack.push((a, idx));
+            stack.push((idx, b));
+        }
+    }
+    poly.iter()
+        .zip(keep)
+        .filter(|(_, k)| *k)
+        .map(|(p, _)| *p)
+        .collect()
+}
+
+fn point_segment_dist(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 == 0.0 {
+        0.0
+    } else {
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0)
+    };
+    let (qx, qy) = (a[0] + t * dx, a[1] + t * dy);
+    ((p[0] - qx).powi(2) + (p[1] - qy).powi(2)).sqrt()
 }
 
 fn power_s(layer: &Layer, input: &GenerateInput) -> f64 {
@@ -60,11 +119,12 @@ fn cut_vector(g: &mut GcodeBuilder, polys: &[Polyline], layer: &Layer, input: &G
     let s = power_s(layer, input);
     let _ = CutKind::Cut;
     g.layer_header(&layer.name, input.dynamic_power, s);
+    let polys: Vec<Polyline> = polys.iter().map(|p| simplify(p, CURVE_TOLERANCE_MM)).collect();
     for pass in 0..layer.passes.max(1) {
         if layer.passes > 1 {
             g.comment(&format!("pass {}/{}", pass + 1, layer.passes));
         }
-        for poly in polys {
+        for poly in &polys {
             if poly.len() < 2 {
                 continue;
             }
@@ -128,17 +188,12 @@ fn engrave_raster(
 
         let lead_col = if left_to_right { 0 } else { raster.width };
         g.travel([col_x(lead_col), y_mm]);
-        g.raw(&format!("G1 F{}", crate::gcode::fmt(layer.feed)));
+        g.set_feed(layer.feed);
 
         for run in ordered {
             let (start, end, s) = *run;
             let x_col = if left_to_right { end } else { start };
-
-            g.raw(&format!(
-                "G1 X{} S{}",
-                crate::gcode::fmt(col_x(x_col)),
-                crate::gcode::fmt(s.round())
-            ));
+            g.raster_run(col_x(x_col), s.round());
         }
         left_to_right = !left_to_right;
     }
@@ -200,24 +255,52 @@ mod tests {
             dynamic_power: true,
             max_power: 1000.0,
             line_interval_mm: 0.0,
+            accel: 500.0,
+            baud: 115_200,
         };
         let r = generate(&input, None, false);
         assert!(r.gcode.contains("M4 S800"), "dynamic power at 80%");
-        assert!(r.gcode.contains("G1 X10 Y0 F600"));
-        assert!(r.gcode.contains("G0 X0 Y0"), "parks at origin");
+        assert!(r.gcode.contains("G1X10Y0F600"), "first cut carries G1 and F");
+        assert!(r.gcode.contains("\nX10Y10\n"), "next cut is modal: no G1, no F");
+        assert!(r.gcode.contains("G0X0Y0"), "parks at origin");
         assert!(r.est_seconds > 0.0);
+    }
+
+    #[test]
+    fn simplify_thins_curves_but_keeps_corners_and_ends() {
+        use std::f64::consts::TAU;
+        // A 10 mm circle sampled 1000 times: at 0.05 mm chord error about
+        // 32 segments reproduce it.
+        let fine: Polyline = (0..=1000)
+            .map(|i| {
+                let t = i as f64 / 1000.0 * TAU;
+                [10.0 * t.cos(), 10.0 * t.sin()]
+            })
+            .collect();
+        let s = simplify(&fine, CURVE_TOLERANCE_MM);
+        assert!(s.len() > 20 && s.len() < 60, "{} points", s.len());
+        assert_eq!(s[0], fine[0]);
+        assert_eq!(*s.last().unwrap(), *fine.last().unwrap());
+
+        let line: Polyline = vec![[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]];
+        assert_eq!(simplify(&line, CURVE_TOLERANCE_MM).len(), 2, "collinear points go");
+
+        let corner: Polyline = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]];
+        assert_eq!(simplify(&corner, CURVE_TOLERANCE_MM), corner, "a real corner stays");
     }
 
     #[test]
     fn frame_traces_bounds_with_beam_off() {
         let b = DocBounds { min_x: 10.0, min_y: 20.0, max_x: 90.0, max_y: 60.0 };
         let g = frame_gcode(&b, 3000.0, false);
-        for corner in ["G0 X10 Y20", "G0 X90 Y20", "G0 X90 Y60", "G0 X10 Y60"] {
+        for corner in ["G0X10Y20", "G0X90Y20", "G0X90Y60", "G0X10Y60"] {
             assert!(g.contains(corner), "frame visits {corner}");
         }
-        // Prefix-match per line: a bare `contains` would trip over the G17
-        // plane-select in the preamble.
-        let cuts = g.lines().any(|l| l.starts_with("G1 ") || l.starts_with("M4"));
+        // Match whole motion words: `G17` in the preamble also starts with
+        // "G1", and modal cut lines start straight at the X word.
+        let cuts = g.lines().any(|l| {
+            l.starts_with("G1X") || l.starts_with("G1F") || l.starts_with('X') || l.starts_with("M4")
+        });
         assert!(!cuts, "frame never cuts or enables the laser");
     }
 
@@ -226,8 +309,8 @@ mod tests {
         let b = DocBounds { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0 };
         let g = frame_gcode(&b, 3000.0, true);
         // (10,0) -> A=10, B=10 ; (10,10) -> A=20, B=0
-        assert!(g.contains("G0 X10 Y10"));
-        assert!(g.contains("G0 X20 Y0"));
+        assert!(g.contains("G0X10Y10"));
+        assert!(g.contains("G0X20Y0"));
     }
 
     #[test]
@@ -243,11 +326,13 @@ mod tests {
             dynamic_power: true,
             max_power: 1000.0,
             line_interval_mm: 0.0,
+            accel: 500.0,
+            baud: 115_200,
         };
         let r = generate(&input, None, true);
         // (10,0) -> A=x+y=10, B=x-y=10
-        assert!(r.gcode.contains("G1 X10 Y10 F600"), "corexy maps (10,0)->(10,10)");
+        assert!(r.gcode.contains("G1X10Y10F600"), "corexy maps (10,0)->(10,10)");
         // (10,10) -> A=20, B=0
-        assert!(r.gcode.contains("G1 X20 Y0"), "corexy maps (10,10)->(20,0)");
+        assert!(r.gcode.contains("\nX20Y0\n"), "corexy maps (10,10)->(20,0)");
     }
 }
