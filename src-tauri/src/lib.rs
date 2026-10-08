@@ -20,6 +20,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::reveal_window,
             commands::list_ports,
             commands::connect,
             commands::disconnect,

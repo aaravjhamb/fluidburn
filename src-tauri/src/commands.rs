@@ -42,9 +42,23 @@ fn sync_corexy(state: &AppState) {
     state.device.set_corexy(active_corexy(state));
 }
 
+/// The main window is created hidden (tauri.conf.json) so the blank webview
+/// never flashes; the frontend calls this once its first screen has painted.
 #[tauri::command]
-pub fn list_ports() -> Vec<String> {
-    serial::list_ports()
+pub fn reveal_window(window: tauri::WebviewWindow) {
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+/// Port enumeration goes through IOKit / SetupAPI and can take hundreds of
+/// milliseconds, and the frontend asks for it during startup. A plain (sync)
+/// command runs on the main thread and would stall the webview's first paint,
+/// so the scan is handed to a blocking worker instead.
+#[tauri::command]
+pub async fn list_ports() -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(serial::list_ports)
+        .await
+        .unwrap_or_default()
 }
 
 /// Lines pushed once the controller announces itself. `$32` is the important

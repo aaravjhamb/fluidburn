@@ -15,6 +15,38 @@ import {
   type SceneObj,
 } from "../lib/scene";
 
+const THEME_KEY = "fluidburn.theme";
+
+// The theme lives in the Rust config, which only arrives after the first
+// render. To avoid a light flash on dark systems (or on an explicit Dark
+// choice) it is mirrored into localStorage, where the inline script in
+// index.html reads it before the stylesheet applies and this store reads it
+// before the first render.
+function readStoredTheme(): Theme {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    if (t === "Light" || t === "Dark" || t === "Auto") return t;
+  } catch {
+    // Storage can be unavailable; fall through to Auto.
+  }
+  return "Auto";
+}
+
+function storeTheme(t: Theme) {
+  try {
+    localStorage.setItem(THEME_KEY, t);
+  } catch {
+    // Best effort only.
+  }
+}
+
+function systemPrefersDark(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.matchMedia?.("(prefers-color-scheme: dark)").matches
+  );
+}
+
 const DEFAULT_STATUS: GrblStatus = {
   state: "Disconnected",
   wpos: [0, 0, 0],
@@ -149,8 +181,8 @@ export const useStore = create<AppState>((set, get) => ({
   past: [],
   future: [],
 
-  theme: "Auto",
-  systemDark: false,
+  theme: readStoredTheme(),
+  systemDark: systemPrefersDark(),
   showToolpath: true,
 
   setCorner: (key, pt) => set((s) => ({ corners: { ...s.corners, [key]: pt } })),
@@ -165,7 +197,11 @@ export const useStore = create<AppState>((set, get) => ({
   pushConsole: (line) =>
     set((s) => ({ console: [...s.console.slice(-499), line] })),
 
-  setConfig: (config) => set({ config, theme: config.theme ?? "Auto" }),
+  setConfig: (config) => {
+    const theme = config.theme ?? "Auto";
+    storeTheme(theme);
+    set({ config, theme });
+  },
   activeMachine: () => {
     const c = get().config;
     if (!c || !c.activeId) return c?.machines[0] ?? null;
@@ -416,7 +452,10 @@ export const useStore = create<AppState>((set, get) => ({
   setProgress: (progress) => set({ progress }),
   setJobError: (jobError) => set({ jobError }),
 
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    storeTheme(theme);
+    set({ theme });
+  },
   setSystemDark: (systemDark) => set({ systemDark }),
   resolvedTheme: () => {
     const s = get();
